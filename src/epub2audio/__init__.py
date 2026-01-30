@@ -1,6 +1,7 @@
 """EPUB to Audiobook CLI package."""
 
 from .epub_reader import EbooklibEpubReader
+from .text_cleaner import BasicTextCleaner
 from .interfaces import (
     AudioChunk,
     AudioProcessor,
@@ -21,6 +22,7 @@ __all__ = [
     "__version__",
     "AudioChunk",
     "AudioProcessor",
+    "BasicTextCleaner",
     "BookMetadata",
     "Chapter",
     "EbooklibEpubReader",
