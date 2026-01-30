@@ -47,7 +47,6 @@ Goal: Add TTS engine interface, default local model, and chunk synthesis flow.
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
-| [ ] | Define TTS interface (synthesize(text, voice, config) -> audio) | Sequential | Medium | No | Enables swappable engines |
 | [x] | Define TTS interface (synthesize(text, voice, config) -> audio) | Sequential | Medium | No | Enables swappable engines |
 | [x] | Select and integrate default local TTS model | Sequential | Hard | [Done](research/03_tts_model_research.md) | Must be zero-config |
 | [x] | Implement chunk synthesis pipeline using TTS interface | Sequential | Medium | No | Uses segmenter outputs |
