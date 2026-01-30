@@ -13,7 +13,7 @@ Goal: Establish repository structure, coding standards, and initial CLI scaffold
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
-| [ ] | Create base package layout (src/, tests/, resources/) | Sequential | Easy | No | Foundation for all modules |
+| [x] | Create base package layout (src/, tests/, resources/) | Sequential | Easy | No | Foundation for all modules |
 | [ ] | Define module interfaces/contracts (EPUB, cleaner, segmenter, TTS, audio, packaging, state) | Sequential | Medium | No | Aligns all downstream work |
 | [ ] | Create initial CLI entrypoint `epub2audio` | Sequential | Medium | No | Can be minimal: prints help + runs pipeline stub |
 | [ ] | Add logging framework + per-book log structure | Parallel | Medium | No | Needed for error handling and resumability |
