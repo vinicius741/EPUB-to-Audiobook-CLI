@@ -7,6 +7,10 @@ name = "epub2audio"
 version = "0.1.0"
 description = "EPUB to Audiobook CLI"
 requires-python = ">=3.10"
+dependencies = [
+    "ebooklib>=0.18",
+    "beautifulsoup4>=4.12",
+]
 
 [project.scripts]
 epub2audio = "epub2audio.cli:main"
