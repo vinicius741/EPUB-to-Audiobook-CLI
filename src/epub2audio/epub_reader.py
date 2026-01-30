@@ -244,7 +244,7 @@ def _extract_chapters(
             continue
 
         href = _get_item_href(item)
-        html_title, text = _extract_title_and_text(item.get_content())
+        html_title, text = _extract_title_and_text(_get_item_content(item))
         title = _resolve_title(
             href=href,
             toc_map=toc_map,
@@ -281,6 +281,22 @@ def _get_item_href(item: object) -> str:
     return str(getattr(item, "file_name", "")) or str(getattr(item, "href", ""))
 
 
+def _get_item_content(item: object) -> bytes | str:
+    if hasattr(item, "get_body_content"):
+        try:
+            body = item.get_body_content()
+            if body:
+                return body
+        except Exception:  # pragma: no cover - defensive
+            pass
+    if hasattr(item, "get_content"):
+        try:
+            return item.get_content()
+        except Exception:  # pragma: no cover - defensive
+            return b""
+    return ""
+
+
 def _resolve_title(
     href: str,
     toc_map: dict[str, str],
@@ -310,15 +326,48 @@ def _resolve_title(
 def _extract_title_and_text(content: bytes | str) -> tuple[str | None, str]:
     soup = BeautifulSoup(content, "html.parser")
 
-    for tag in soup(["script", "style", "noscript", "header", "footer", "nav", "svg"]):
-        tag.decompose()
-
     title = None
     if soup.title and soup.title.string:
         title = soup.title.string.strip() or None
+
+    primary_text = _extract_text_from_soup(soup, remove_structural=True)
+    if _should_fallback_to_full_text(primary_text):
+        fallback_text = _extract_text_from_soup(
+            BeautifulSoup(content, "html.parser"),
+            remove_structural=False,
+        )
+        if _use_fallback_text(primary_text, fallback_text):
+            return title, fallback_text
+
+    return title, primary_text
+
+
+def _extract_text_from_soup(soup: BeautifulSoup, *, remove_structural: bool) -> str:
+    if remove_structural:
+        for tag in soup(["script", "style", "noscript", "header", "footer", "nav", "svg"]):
+            tag.decompose()
+    else:
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
 
     root = soup.body if soup.body else soup
     text = root.get_text(separator="\n")
     lines = [line.strip() for line in text.splitlines()]
     lines = [line for line in lines if line]
-    return title, "\n".join(lines)
+    return "\n".join(lines)
+
+
+def _should_fallback_to_full_text(text: str) -> bool:
+    return _word_count(text) < 50
+
+
+def _use_fallback_text(primary: str, fallback: str) -> bool:
+    primary_words = _word_count(primary)
+    fallback_words = _word_count(fallback)
+    if fallback_words <= primary_words:
+        return False
+    return fallback_words >= max(primary_words * 3, 80)
+
+
+def _word_count(text: str) -> int:
+    return sum(1 for token in text.split() if token)

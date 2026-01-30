@@ -38,7 +38,14 @@ def _patch_mistral_tokenizer() -> None:
         def patched_from_pretrained(pretrained_model_name_or_path, *args, **kwargs):
             if "fix_mistral_regex" not in kwargs:
                 kwargs["fix_mistral_regex"] = True
-            return original_from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+            try:
+                return original_from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+            except TypeError as exc:
+                # Avoid breaking when upstream already supplies fix_mistral_regex.
+                if "fix_mistral_regex" in str(exc):
+                    kwargs.pop("fix_mistral_regex", None)
+                    return original_from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+                raise
 
         AutoTokenizer.from_pretrained = patched_from_pretrained
         _MISTRAL_TOKENIZER_PATCHED = True
@@ -95,6 +102,7 @@ class MlxTtsEngine(TtsEngine):
         if load_model is not None:
             try:
                 self._model = load_model(self.model_id)
+                _call_post_load_hook(self._model)
                 _LOGGER.info("Loaded MLX Audio model %s", self.model_id)
                 return
             except Exception as exc:  # pragma: no cover - runtime dependency
@@ -109,6 +117,7 @@ class MlxTtsEngine(TtsEngine):
 
         try:
             self._tts = TextToSpeech.from_pretrained(self.model_id)
+            _call_post_load_hook(self._tts)
             _LOGGER.info("Loaded MLX Audio TextToSpeech model %s", self.model_id)
         except Exception as exc:  # pragma: no cover - runtime dependency
             raise TtsModelError(f"Failed to load MLX Audio TextToSpeech model: {exc}") from exc
@@ -237,6 +246,18 @@ def _generate_with_tts(tts: object, text: str, **kwargs: object) -> tuple[list[f
         audio = audio[0]
     audio_list = _to_list(audio)
     return _normalize_audio_list(audio_list)
+
+
+def _call_post_load_hook(model: object | None) -> None:
+    if model is None:
+        return
+    hook = getattr(model, "post_load_hook", None)
+    if not callable(hook):
+        return
+    try:
+        hook()
+    except Exception as exc:  # pragma: no cover - runtime dependency
+        _LOGGER.debug("post_load_hook failed: %s", exc)
 
 
 def _accepted_kwargs(func: object) -> set[str]:
