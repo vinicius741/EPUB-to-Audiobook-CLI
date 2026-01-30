@@ -36,16 +36,11 @@ This document tracks all research tasks identified in the development plan that 
 ### 3. Default Local TTS Model Selection
 **Task**: Select and integrate default local TTS model
 **Research needed**: Model capabilities, licensing, runtime dependencies
+The select model is mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit
 
-- [ ] Research available local TTS models:
-  - [ ] Piper TTS
-  - [ ] Coqui TTS
-  - [ ] Espeak-ng
-  - [ ] Other open-source options
 - [ ] Evaluate model capabilities and quality
 - [ ] Verify licensing compatibility (must be permissible for distribution)
 - [ ] Identify runtime dependencies (Python packages, system libraries)
-- [ ] Test model download/initialization process
 - [ ] Document recommended model and integration approach
 - [ ] Verify zero-config requirement (no API keys, works offline)
 

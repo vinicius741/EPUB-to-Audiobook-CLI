@@ -32,8 +32,8 @@ Goal: Extract chapters in correct order, clean/normalize text, segment into safe
 | [x] | Implement EPUB reader + TOC/reading order extraction | Sequential | Hard | [Done](research/01_epub_parsing_research.md) | Critical correctness task |
 | [x] | Extract metadata (title, author, cover) | Parallel | Medium | [Done](research/02_epub_metadata_research.md) | Needed for packaging |
 | [x] | Build text cleaner/normalizer (whitespace, unicode normalization, citations) | Parallel | Medium | No | Keep defaults conservative |
-| [ ] | Implement text segmenter with punctuation + length rules | Sequential | Medium | No | Used by TTS and caching |
-| [ ] | Add chunk retry/split logic on synth failure (design) | Parallel | Medium | No | Used in Phase 2 |
+| [x] | Implement text segmenter with punctuation + length rules | Sequential | Medium | No | Used by TTS and caching |
+| [x] | Add chunk retry/split logic on synth failure (design) | Parallel | Medium | No | Used in Phase 2 |
 
 Verification (Phase 1):
 - For a known EPUB, chapters extracted in correct order
@@ -42,6 +42,7 @@ Verification (Phase 1):
 - Metadata and cover are extracted when present
 
 ## Phase 2 — TTS abstraction + default engine
+The select model is mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit
 Goal: Add TTS engine interface, default local model, and chunk synthesis flow.
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |

@@ -2,6 +2,7 @@
 
 from .epub_reader import EbooklibEpubReader
 from .text_cleaner import BasicTextCleaner
+from .text_segmenter import BasicTextSegmenter
 from .interfaces import (
     AudioChunk,
     AudioProcessor,
@@ -23,6 +24,7 @@ __all__ = [
     "AudioChunk",
     "AudioProcessor",
     "BasicTextCleaner",
+    "BasicTextSegmenter",
     "BookMetadata",
     "Chapter",
     "EbooklibEpubReader",
