@@ -1,0 +1,19 @@
+# Sample configuration for epub2audio
+# Copy to config.toml and edit. Relative paths resolve from this file's folder.
+
+[paths]
+# Defaults relative to the config file location
+epubs = "epubs"
+out = "out"
+cache = "cache"
+logs = "logs"
+
+[logging]
+# Levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+level = "INFO"
+console_level = "INFO"
+
+# Placeholder for future options (not wired yet):
+#[tts]
+#engine = "local"
+#voice = "default"

@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PYTHONPATH="$SCRIPT_DIR/src${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m epub2audio "$@"
