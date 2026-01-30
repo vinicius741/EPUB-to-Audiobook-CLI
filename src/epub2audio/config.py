@@ -240,3 +240,48 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def write_default_config(path: Path) -> None:
+    """Write the default config.toml file.
+
+    NOTE: The TOML content below should be kept in sync with the default values
+    defined in the Config, PathsConfig, LoggingConfig, TtsConfig, and AudioConfig
+    dataclasses above. If you update defaults in one place, update both.
+    """
+    toml_content = """# epub2audio configuration
+
+[paths]
+epubs = "epubs"
+out = "out"
+cache = "cache"
+logs = "logs"
+
+[logging]
+level = "INFO"
+console_level = "INFO"
+
+[tts]
+engine = "mlx"
+model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
+voice = null
+lang_code = null
+speed = 1.0
+sample_rate = 24000
+channels = 1
+max_chars = 1000
+min_chars = 200
+hard_max_chars = 1250
+max_retries = 2
+backoff_base = 0.5
+backoff_jitter = 0.1
+output_format = "wav"
+
+[audio]
+silence_ms = 250
+normalize = true
+target_lufs = -23.0
+lra = 7.0
+true_peak = -1.0
+"""
+    path.write_text(toml_content)

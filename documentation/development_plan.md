@@ -116,7 +116,7 @@ Goal: Finish CLI behavior and default folders; add init/doctor and UX polish.
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
 | [ ] | Ensure folder auto-creation (epubs/, out/, cache/) | Sequential | Easy | No | Core UX |
-| [ ] | Implement `epub2audio init` | Parallel | Medium | No | Creates folders + optional config |
+| [x] | Implement `epub2audio init` | Parallel | Medium | No | Creates folders + optional config |
 | [ ] | Implement quiet-by-default output + progress indicators | Parallel | Medium | No | Calm, readable output |
 | [ ] | Add structured error logs per book | Parallel | Medium | No | Improves diagnostics |
 | [ ] | Add minimal debug flags (optional) | Parallel | Easy | No | Keep defaults zero-config |
