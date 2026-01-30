@@ -43,7 +43,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(_render_summary(config, run_id, inputs, results=[]))
         return 0
 
-    results = run_pipeline(log_ctx, inputs)
+    results = run_pipeline(log_ctx, inputs, config)
     print(_render_summary(config, run_id, inputs, results))
     return 0
 
@@ -51,7 +51,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 def build_run_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="epub2audio",
-        description="EPUB to Audiobook CLI (Phase 0 stub)",
+        description="EPUB to Audiobook CLI",
     )
     parser.add_argument(
         "inputs",
@@ -155,7 +155,7 @@ def _render_summary(
     results: Sequence[object],
 ) -> str:
     lines = [
-        "epub2audio (stub)",
+        "epub2audio",
         f"run id: {run_id}",
         f"inputs: {len(inputs)}",
         f"logs: {config.paths.logs}",
@@ -170,4 +170,4 @@ def _render_summary(
 def _render_results_summary(results: Sequence[object]) -> str:
     if not results:
         return "No inputs provided. Nothing processed yet."
-    return f"Stubbed {len(results)} item(s). No real processing performed."
+    return f"Processed {len(results)} item(s)."

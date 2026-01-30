@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-import hashlib
 import logging
 import re
 import wave
 from typing import Iterable, Mapping
 
+from .audio_cache import chunk_cache_key
 from .interfaces import AudioChunk, TtsEngine
 from .utils import ensure_dir
 
@@ -297,19 +297,15 @@ def _chunk_id(
     sample_rate: int,
     channels: int,
 ) -> str:
-    payload = "|".join(
-        [
-            model_id,
-            voice or "",
-            lang_code or "",
-            f"{speed:.3f}",
-            str(sample_rate),
-            str(channels),
-            text,
-        ]
+    return chunk_cache_key(
+        text,
+        model_id=model_id,
+        voice=voice,
+        lang_code=lang_code,
+        speed=speed,
+        sample_rate=sample_rate,
+        channels=channels,
     )
-    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-    return f"tts_{digest[:16]}"
 
 
 def _is_speakable_text(text: str) -> bool:

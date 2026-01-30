@@ -44,6 +44,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "backoff_jitter": 0.1,
         "output_format": "wav",
     },
+    "audio": {
+        "silence_ms": 250,
+        "normalize": True,
+        "target_lufs": -23.0,
+        "lra": 7.0,
+        "true_peak": -1.0,
+    },
 }
 
 
@@ -80,10 +87,20 @@ class TtsConfig:
 
 
 @dataclass(frozen=True)
+class AudioConfig:
+    silence_ms: int
+    normalize: bool
+    target_lufs: float
+    lra: float
+    true_peak: float
+
+
+@dataclass(frozen=True)
 class Config:
     paths: PathsConfig
     logging: LoggingConfig
     tts: TtsConfig
+    audio: AudioConfig
     source: Path | None = None
 
 
@@ -133,7 +150,15 @@ def load_config(config_path: Path | None = None, *, cwd: Path | None = None) -> 
         backoff_jitter=float(tts_raw.get("backoff_jitter", 0.1)),
         output_format=str(tts_raw.get("output_format", "wav")).lower(),
     )
-    return Config(paths=paths, logging=logging, tts=tts, source=source)
+    audio_raw = merged.get("audio", {})
+    audio = AudioConfig(
+        silence_ms=int(audio_raw.get("silence_ms", 250)),
+        normalize=bool(audio_raw.get("normalize", True)),
+        target_lufs=float(audio_raw.get("target_lufs", -23.0)),
+        lra=float(audio_raw.get("lra", 7.0)),
+        true_peak=float(audio_raw.get("true_peak", -1.0)),
+    )
+    return Config(paths=paths, logging=logging, tts=tts, audio=audio, source=source)
 
 
 def config_summary(config: Config) -> str:
@@ -159,7 +184,13 @@ def config_summary(config: Config) -> str:
         f"  min_chars: {config.tts.min_chars}\n"
         f"  hard_max_chars: {config.tts.hard_max_chars or 'auto'}\n"
         f"  max_retries: {config.tts.max_retries}\n"
-        f"  output_format: {config.tts.output_format}"
+        f"  output_format: {config.tts.output_format}\n"
+        "Audio\n"
+        f"  silence_ms: {config.audio.silence_ms}\n"
+        f"  normalize: {config.audio.normalize}\n"
+        f"  target_lufs: {config.audio.target_lufs}\n"
+        f"  lra: {config.audio.lra}\n"
+        f"  true_peak: {config.audio.true_peak}"
     )
 
 

@@ -114,9 +114,9 @@ def _extract_cover_image(book: epub.EpubBook) -> Path | None:
 def _get_cover_item(book: epub.EpubBook) -> object | None:
     """Find the cover item in the EPUB, handling both EPUB 2 and 3 formats."""
     # Try EPUB 3 style: items with properties="cover-image"
-    cover_items = book.get_items_of_type(ITEM_COVER)
-    if cover_items:
-        return cover_items[0]
+    cover_item = next(iter(book.get_items_of_type(ITEM_COVER)), None)
+    if cover_item is not None:
+        return cover_item
 
     # Try EPUB 2 style: <meta name="cover" content="item-id" />
     for meta_name, meta_content in book.get_metadata("OPF", "meta"):

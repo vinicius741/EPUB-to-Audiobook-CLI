@@ -214,6 +214,7 @@ def _build_engine(config: Config, output_dir: Path) -> MlxTtsEngine:
 
 def _build_settings(config: Config) -> TtsSynthesisSettings:
     return TtsSynthesisSettings(
+        model_id=config.tts.model_id,
         max_chars=config.tts.max_chars,
         min_chars=config.tts.min_chars,
         hard_max_chars=config.tts.hard_max_chars,

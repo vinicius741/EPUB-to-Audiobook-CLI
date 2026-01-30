@@ -35,3 +35,13 @@ max_retries = 2
 backoff_base = 0.5
 backoff_jitter = 0.1
 output_format = "wav"
+
+[audio]
+# Silence between chunks (milliseconds)
+silence_ms = 250
+
+# Loudness normalization (EBU R128)
+normalize = true
+target_lufs = -23.0
+lra = 7.0
+true_peak = -1.0
