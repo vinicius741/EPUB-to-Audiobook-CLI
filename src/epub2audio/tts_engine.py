@@ -15,6 +15,37 @@ from .utils import ensure_dir
 
 _LOGGER = logging.getLogger(__name__)
 
+_MISTRAL_TOKENIZER_PATCHED = False
+
+
+def _patch_mistral_tokenizer() -> None:
+    """Patch Hugging Face tokenizer to fix Mistral regex pattern.
+
+    The Qwen3-TTS and some other models use Mistral-based tokenizers that have
+    a known regex issue. This patches AutoTokenizer to pass fix_mistral_regex=True
+    by default when loading tokenizers.
+
+    See: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e
+    """
+    global _MISTRAL_TOKENIZER_PATCHED
+    if _MISTRAL_TOKENIZER_PATCHED:
+        return
+
+    try:
+        from transformers import AutoTokenizer  # type: ignore
+        original_from_pretrained = AutoTokenizer.from_pretrained
+
+        def patched_from_pretrained(pretrained_model_name_or_path, *args, **kwargs):
+            if "fix_mistral_regex" not in kwargs:
+                kwargs["fix_mistral_regex"] = True
+            return original_from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+
+        AutoTokenizer.from_pretrained = patched_from_pretrained
+        _MISTRAL_TOKENIZER_PATCHED = True
+        _LOGGER.debug("Patched AutoTokenizer to set fix_mistral_regex=True by default")
+    except ImportError:
+        _LOGGER.debug("transformers library not available, skipping tokenizer patch")
+
 
 class TtsError(RuntimeError):
     """Base class for TTS failures."""
@@ -53,6 +84,8 @@ class MlxTtsEngine(TtsEngine):
     def ensure_loaded(self) -> None:
         if self._model is not None or self._tts is not None:
             return
+
+        _patch_mistral_tokenizer()
 
         try:
             from mlx_audio.tts.utils import load_model  # type: ignore
