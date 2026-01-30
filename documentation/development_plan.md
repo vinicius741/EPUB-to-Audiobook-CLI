@@ -132,8 +132,8 @@ Goal: Improve reliability, add tests, and document usage.
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
 | [x] | Add unit tests for segmenter + hash + state | Parallel | Medium | No | Deterministic tests |
-| [ ] | Add integration test for EPUB -> m4b (sample) | Sequential | Hard | No | Requires sample EPUB |
-| [ ] | Add failure-case tests (bad EPUB, TTS fail) | Parallel | Medium | No | Ensures resilience |
+| [x] | Add integration test for EPUB -> m4b (sample) | Sequential | Hard | No | Requires sample EPUB |
+| [x] | Add failure-case tests (bad EPUB, TTS fail) | Parallel | Medium | No | Ensures resilience |
 | [ ] | Write README usage + defaults | Parallel | Easy | No | User onboarding |
 | [ ] | Add developer docs (architecture, module contracts) | Parallel | Medium | No | Supports extensibility |
 
