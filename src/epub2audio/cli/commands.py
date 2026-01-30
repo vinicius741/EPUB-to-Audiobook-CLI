@@ -40,7 +40,9 @@ def run_main(args: argparse.Namespace) -> int:
     log_ctx = initialize_logging(config, run_id)
     logger = log_ctx.logger
 
-    inputs = resolve_inputs(args.inputs)
+    # Default to configured epubs directory if no inputs provided
+    input_paths = args.inputs if args.inputs else [config.paths.epubs]
+    inputs = resolve_inputs(input_paths)
     progress = ProgressDisplay()
 
     if not inputs:

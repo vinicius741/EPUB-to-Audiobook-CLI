@@ -49,7 +49,7 @@ epub2audio init
 # 2. (Optional) Verify your environment
 epub2audio doctor --smoke-test
 
-# 3. Place EPUB files in the 'epubs/' folder and run
+# 3. Place EPUB files in the folder specified by config.toml (default: 'epubs/')
 epub2audio
 ```
 
@@ -84,7 +84,7 @@ epub2audio [inputs...] [options]
 ```
 
 **Arguments:**
-- `inputs` - Optional EPUB files or folders to process. If omitted, uses the `epubs/` folder.
+- `inputs` - Optional EPUB files or folders to process. If omitted, uses the folder specified in `config.toml` under `[paths].epubs` (defaults to `epubs/`).
 
 **Examples:**
 ```bash

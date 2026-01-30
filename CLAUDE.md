@@ -34,7 +34,7 @@ pip3 install -e .
 # Main entry point
 epub2audio [inputs...]
 
-# Process all EPUBs in default directory
+# Process all EPUBs in configured directory (default: epubs/)
 epub2audio
 
 # Initialize folders and config
