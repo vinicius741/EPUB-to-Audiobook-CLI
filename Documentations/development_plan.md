@@ -48,15 +48,19 @@ Goal: Add TTS engine interface, default local model, and chunk synthesis flow.
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
 | [ ] | Define TTS interface (synthesize(text, voice, config) -> audio) | Sequential | Medium | No | Enables swappable engines |
-| [ ] | Select and integrate default local TTS model | Sequential | Hard | Yes (model capabilities, licensing, runtime deps) | Must be zero-config |
+| [ ] | Select and integrate default local TTS model | Sequential | Hard | [Done](research/03_tts_model_research.md) | Must be zero-config |
 | [ ] | Implement chunk synthesis pipeline using TTS interface | Sequential | Medium | No | Uses segmenter outputs |
 | [ ] | Add failure retry by splitting chunk | Parallel | Medium | No | Use exponential backoff / split strategy |
-| [ ] | Add CLI `doctor` checks for TTS model loadability | Parallel | Medium | Yes (model init patterns) | Improves UX |
+| [ ] | Add CLI `doctor` checks for TTS model loadability | Parallel | Medium | [Done](research/03_tts_model_research.md) | Improves UX |
 
 Verification (Phase 2):
-- Single chunk synthesizes audio via default engine
-- Long chunk triggers automatic split and succeeds
-- `epub2audio doctor` reports model availability
+- **Environment Validation**: `epub2audio doctor` confirms Metal/GPU usage, sufficient RAM (>4GB detected), and model cache presence.
+- **Basic Synthesis (Smoke Test)**: A simple sentence ("Hello world") generates a non-zero byte audio file (WAV/Raw) with valid headers.
+- **Performance Threshold**: Real-Time Factor (RTF) is < 1.0 (synthesis time < audio duration) on Apple Silicon, ensuring synthesis outpaces playback.
+- **Long-Text Resilience**: A chunk exceeding the model's context window (e.g., >1000 chars) triggers automatic splitting/streaming logic without OOM or crash.
+- **Error Handling**: Disconnecting internet after model download does not prevent synthesis; invalid inputs (empty strings, pure punctuation) return graceful warnings, not stack traces.
+- **Audio Physiology**: Output audio has no clipping, no static artifacts at start/end, and maintains consistent volume level.
+- **Format Compliance**: Output matches configured sample rate (24kHz/44.1kHz) and channel count.
 
 ## Phase 3 — Audio pipeline + caching
 Goal: Deterministic chunk caching, silence insertion, normalization, stitching to chapter audio.

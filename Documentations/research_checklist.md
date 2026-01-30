@@ -38,11 +38,14 @@ This document tracks all research tasks identified in the development plan that 
 **Research needed**: Model capabilities, licensing, runtime dependencies
 The select model is mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit
 
-- [ ] Evaluate model capabilities and quality
-- [ ] Verify licensing compatibility (must be permissible for distribution)
-- [ ] Identify runtime dependencies (Python packages, system libraries)
-- [ ] Document recommended model and integration approach
-- [ ] Verify zero-config requirement (no API keys, works offline)
+- [x] Evaluate model capabilities and quality
+- [x] Verify licensing compatibility (must be permissible for distribution)
+- [x] Identify runtime dependencies (Python packages, system libraries)
+- [x] Document recommended model and integration approach
+- [x] Verify zero-config requirement (no API keys, works offline)
+
+**Outcome**: [Research Complete](research/03_tts_model_research.md). Confirmed Qwen3-TTS 1.7B (4-bit) as the optimal choice for MacBook Pro (MLX).
+
 
 ---
 
