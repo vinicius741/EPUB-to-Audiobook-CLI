@@ -8,6 +8,7 @@ from epub2audio.interfaces import (
     AudioProcessor,
     BookMetadata,
     Chapter,
+    ChapterAudio,
     EpubBook,
     EpubReader,
     Packager,
@@ -59,7 +60,7 @@ class DummyAudio:
 class DummyPackager:
     def package(
         self,
-        chapter_audio: Sequence[Path],
+        chapters: Sequence[ChapterAudio],
         metadata: BookMetadata,
         out_path: Path,
         cover_image: Path | None = None,

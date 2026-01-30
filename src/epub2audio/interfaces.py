@@ -36,6 +36,13 @@ class AudioChunk:
 
 
 @dataclass(frozen=True)
+class ChapterAudio:
+    index: int
+    title: str
+    path: Path
+
+
+@dataclass(frozen=True)
 class EpubBook:
     metadata: BookMetadata
     chapters: Sequence[Chapter]
@@ -95,7 +102,7 @@ class AudioProcessor(Protocol):
 class Packager(Protocol):
     def package(
         self,
-        chapter_audio: Sequence[Path],
+        chapters: Sequence[ChapterAudio],
         metadata: BookMetadata,
         out_path: Path,
         cover_image: Path | None = None,

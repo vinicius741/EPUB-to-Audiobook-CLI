@@ -11,8 +11,9 @@ from .audio_cache import AudioCacheLayout
 from .audio_processing import FfmpegAudioProcessor, LoudnessConfig
 from .config import Config
 from .epub_reader import EbooklibEpubReader
-from .interfaces import AudioChunk, Chapter, EpubBook
+from .interfaces import AudioChunk, Chapter, ChapterAudio, EpubBook
 from .logging_setup import LoggingContext
+from .packaging import FfmpegPackager
 from .text_cleaner import BasicTextCleaner
 from .text_segmenter import BasicTextSegmenter
 from .tts_engine import MlxTtsEngine, TtsError, TtsModelError
@@ -27,6 +28,7 @@ class BookResult:
     book_slug: str
     status: str
     message: str
+    output_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,7 @@ def run_pipeline(
             true_peak=config.audio.true_peak,
         ),
     )
+    packager = FfmpegPackager(work_dir=ensure_dir(config.paths.cache / "packaging"))
 
     sources = _expand_inputs(inputs)
     for source in sources:
@@ -110,7 +113,33 @@ def run_pipeline(
         empty_count = sum(1 for r in chapter_results if r.status == "empty")
         failed_count = sum(1 for r in chapter_results if r.status == "failed")
         message = f"Generated {ok_count} chapter(s), {empty_count} empty, {failed_count} failed."
-        results.append(BookResult(source=source, book_slug=book_slug, status="ok", message=message))
+
+        chapter_audio = _collect_chapter_audio(book, chapter_results, book_logger)
+        if not chapter_audio:
+            results.append(BookResult(source=source, book_slug=book_slug, status="ok", message=message))
+            _cleanup_cover_image(book.metadata.cover_image, book_logger)
+            continue
+
+        out_path = _resolve_output_path(config.paths.out, book_slug)
+        try:
+            _validate_output_path(out_path, config.paths.out, book_slug)
+            packaged = packager.package(
+                chapter_audio,
+                book.metadata,
+                out_path,
+                cover_image=book.metadata.cover_image,
+            )
+        except Exception as exc:
+            fail_message = f"{message} Packaging failed: {exc}"
+            results.append(BookResult(source=source, book_slug=book_slug, status="failed", message=fail_message))
+            _cleanup_cover_image(book.metadata.cover_image, book_logger)
+            continue
+
+        final_message = f"{message} Packaged: {packaged}"
+        results.append(
+            BookResult(source=source, book_slug=book_slug, status="ok", message=final_message, output_path=packaged)
+        )
+        _cleanup_cover_image(book.metadata.cover_image, book_logger)
 
     return results
 
@@ -208,6 +237,63 @@ def _process_book(
             )
         )
     return chapter_results
+
+
+def _collect_chapter_audio(
+    book: EpubBook,
+    chapter_results: Sequence[ChapterResult],
+    logger: logging.Logger,
+) -> list[ChapterAudio]:
+    by_index: dict[int, Path] = {}
+    for result in chapter_results:
+        if result.status != "ok" or not result.output_paths:
+            continue
+        path = result.output_paths[0]
+        by_index[result.chapter_index] = path
+
+    if not by_index:
+        logger.warning("No chapter audio available for packaging.")
+        return []
+
+    chapters: list[ChapterAudio] = []
+    for chapter in book.chapters:
+        path = by_index.get(chapter.index)
+        if path is None:
+            logger.warning("Missing audio for chapter %d (%s); skipping.", chapter.index, chapter.title)
+            continue
+        chapters.append(ChapterAudio(index=chapter.index, title=chapter.title, path=path))
+
+    if not chapters:
+        logger.warning("All chapter audio missing; skipping packaging.")
+    return chapters
+
+
+def _resolve_output_path(out_root: Path, book_slug: str) -> Path:
+    return out_root / book_slug / f"{book_slug}.m4b"
+
+
+def _validate_output_path(out_path: Path, out_root: Path, book_slug: str) -> None:
+    expected_parent = out_root / book_slug
+    expected_name = f"{book_slug}.m4b"
+    if out_path.parent != expected_parent:
+        raise RuntimeError(f"Output directory must be {expected_parent} (got {out_path.parent}).")
+    if out_path.name != expected_name:
+        raise RuntimeError(f"Output filename must be {expected_name} (got {out_path.name}).")
+
+
+def _cleanup_cover_image(cover_image: Path | None, logger: logging.Logger) -> None:
+    if cover_image is None:
+        return
+    if not cover_image.exists():
+        return
+    if not cover_image.is_file():
+        return
+    if not cover_image.name.startswith("epub_cover_"):
+        return
+    try:
+        cover_image.unlink()
+    except OSError as exc:  # pragma: no cover - best-effort cleanup
+        logger.debug("Failed to delete temp cover image %s: %s", cover_image, exc)
 
 
 def _process_chapter(

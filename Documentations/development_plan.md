@@ -83,11 +83,11 @@ Goal: Create final audiobook output with chapter markers and metadata.
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
-| [ ] | Define packaging pipeline interface | Sequential | Medium | No | M4B output contract |
-| [ ] | Implement .m4b creation from chapter audio | Sequential | Hard | [Done](research/05_m4b_packaging_research.md) | Must support chapters |
-| [ ] | Embed metadata (title, author) | Parallel | Medium | [Done](research/05_m4b_packaging_research.md) | Use extracted metadata |
-| [ ] | Embed cover image (if present) | Parallel | Medium | [Done](research/05_m4b_packaging_research.md) | Optional but required when available |
-| [ ] | Validate output path structure and naming | Parallel | Easy | No | `out/<book_slug>/<book_slug>.m4b` |
+| [x] | Define packaging pipeline interface | Sequential | Medium | No | M4B output contract |
+| [x] | Implement .m4b creation from chapter audio | Sequential | Hard | [Done](research/05_m4b_packaging_research.md) | Must support chapters |
+| [x] | Embed metadata (title, author) | Parallel | Medium | [Done](research/05_m4b_packaging_research.md) | Use extracted metadata |
+| [x] | Embed cover image (if present) | Parallel | Medium | [Done](research/05_m4b_packaging_research.md) | Optional but required when available |
+| [x] | Validate output path structure and naming | Parallel | Easy | No | `out/<book_slug>/<book_slug>.m4b` |
 
 Verification (Phase 4):
 - .m4b plays in Apple Books or standard player

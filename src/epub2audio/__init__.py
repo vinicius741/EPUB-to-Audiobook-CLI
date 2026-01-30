@@ -8,6 +8,7 @@ from .interfaces import (
     AudioChunk,
     AudioProcessor,
     BookMetadata,
+    ChapterAudio,
     Chapter,
     EpubBook,
     EpubReader,
@@ -19,6 +20,7 @@ from .interfaces import (
     TextSegmenter,
     TtsEngine,
 )
+from .packaging import FfmpegPackager
 
 __all__ = [
     "__version__",
@@ -27,10 +29,12 @@ __all__ = [
     "BasicTextCleaner",
     "BasicTextSegmenter",
     "BookMetadata",
+    "ChapterAudio",
     "Chapter",
     "EbooklibEpubReader",
     "EpubBook",
     "EpubReader",
+    "FfmpegPackager",
     "Packager",
     "PipelineState",
     "Segment",

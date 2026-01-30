@@ -16,6 +16,7 @@ def test_synthesize_text_splits_long_text(tmp_path: Path) -> None:
             return AudioChunk(index=0, path=tmp_path / f"{len(calls)}.wav")
 
     settings = TtsSynthesisSettings(
+        model_id="test",
         max_chars=50,
         min_chars=10,
         hard_max_chars=60,
@@ -46,6 +47,7 @@ def test_transient_retry(tmp_path: Path) -> None:
             return AudioChunk(index=0, path=tmp_path / "ok.wav")
 
     settings = TtsSynthesisSettings(
+        model_id="test",
         max_chars=200,
         min_chars=10,
         hard_max_chars=None,
@@ -72,6 +74,7 @@ def test_invalid_input_skips(tmp_path: Path) -> None:
             raise TtsInputError("empty")
 
     settings = TtsSynthesisSettings(
+        model_id="test",
         max_chars=200,
         min_chars=10,
         hard_max_chars=None,
