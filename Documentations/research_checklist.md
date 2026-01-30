@@ -8,14 +8,14 @@ This document tracks all research tasks identified in the development plan that 
 **Task**: Implement EPUB reader + TOC/reading order extraction
 **Research needed**: EPUB specification and library capabilities
 
-- [ ] Research EPUB file format specification (EPUB 2.0 and 3.0+)
-- [ ] Identify and evaluate Python libraries for EPUB parsing:
-  - [ ] ebooklib
-  - [ ] epub2txt
-  - [ ] Other available options
-- [ ] Understand TOC (Table of Contents) structure in EPUB files
-- [ ] Understand reading order extraction (spine/linear attribute)
-- [ ] Document recommended library and approach
+- [x] Research EPUB file format specification (EPUB 2.0 and 3.0+)
+- [x] Identify and evaluate Python libraries for EPUB parsing:
+  - [x] ebooklib
+  - [x] epub2txt
+  - [x] Other available options
+- [x] Understand TOC (Table of Contents) structure in EPUB files
+- [x] Understand reading order extraction (spine/linear attribute)
+- [x] Document recommended library and approach
 
 ---
 

@@ -14,10 +14,10 @@ Goal: Establish repository structure, coding standards, and initial CLI scaffold
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
 | [x] | Create base package layout (src/, tests/, resources/) | Sequential | Easy | No | Foundation for all modules |
-| [ ] | Define module interfaces/contracts (EPUB, cleaner, segmenter, TTS, audio, packaging, state) | Sequential | Medium | No | Aligns all downstream work |
-| [ ] | Create initial CLI entrypoint `epub2audio` | Sequential | Medium | No | Can be minimal: prints help + runs pipeline stub |
-| [ ] | Add logging framework + per-book log structure | Parallel | Medium | No | Needed for error handling and resumability |
-| [ ] | Add config loader (defaults + optional config.toml) | Parallel | Medium | No | Will be used in most modules |
+| [x] | Define module interfaces/contracts (EPUB, cleaner, segmenter, TTS, audio, packaging, state) | Sequential | Medium | No | Aligns all downstream work |
+| [x] | Create initial CLI entrypoint `epub2audio` | Sequential | Medium | No | Can be minimal: prints help + runs pipeline stub |
+| [x] | Add logging framework + per-book log structure | Parallel | Medium | No | Needed for error handling and resumability |
+| [x] | Add config loader (defaults + optional config.toml) | Parallel | Medium | No | Will be used in most modules |
 
 Verification (Phase 0):
 - `epub2audio` runs and prints a calm summary stub
@@ -29,7 +29,7 @@ Goal: Extract chapters in correct order, clean/normalize text, segment into safe
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
-| [ ] | Implement EPUB reader + TOC/reading order extraction | Sequential | Hard | Yes (EPUB spec / library capabilities) | Critical correctness task |
+| [ ] | Implement EPUB reader + TOC/reading order extraction | Sequential | Hard | [Done](research/01_epub_parsing_research.md) | Critical correctness task |
 | [ ] | Extract metadata (title, author, cover) | Parallel | Medium | Yes (EPUB metadata fields) | Needed for packaging |
 | [ ] | Build text cleaner/normalizer (whitespace, unicode normalization, citations) | Parallel | Medium | No | Keep defaults conservative |
 | [ ] | Implement text segmenter with punctuation + length rules | Sequential | Medium | No | Used by TTS and caching |
@@ -146,4 +146,3 @@ Verification (Phase 7):
 ## Tracking notes
 - Mark tasks as [x] when completed.
 - If research is needed, log findings in a short note file under `Documentations/research/`.
-
