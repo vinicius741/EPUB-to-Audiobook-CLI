@@ -47,30 +47,19 @@ The select model is mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit
 **Outcome**: [Research Complete](research/03_tts_model_research.md). Confirmed Qwen3-TTS 1.7B (4-bit) as the optimal choice for MacBook Pro (MLX).
 
 
----
-
-### 4. TTS Model Loadability Checks
-**Task**: Add CLI `doctor` checks for TTS model loadability
-**Research needed**: Model initialization patterns
-
-- [ ] Research how selected TTS model initializes
-- [ ] Identify common failure modes for model loading
-- [ ] Determine what checks can be performed for "doctor" command
-- [ ] Document doctor command specification
-
----
-
 ## Phase 3 — Audio pipeline + caching
 
 ### 5. Loudness Normalization
 **Task**: Add loudness normalization
 **Research needed**: EBU R128 / ffmpeg filters
 
-- [ ] Research EBU R128 loudness normalization standard
-- [ ] Identify ffmpeg filters for loudness normalization
-- [ ] Determine target loudness values for audiobooks
-- [ ] Research compatibility across different audio formats
-- [ ] Document normalization approach and ffmpeg commands
+- [x] Research EBU R128 loudness normalization standard
+- [x] Identify ffmpeg filters for loudness normalization
+- [x] Determine target loudness values for audiobooks
+- [x] Research compatibility across different audio formats
+- [x] Document normalization approach and ffmpeg commands
+
+**Outcome**: [Research Complete](research/04_loudness_normalization_research.md). Selected FFmpeg `loudnorm` filter (2-pass) with default target of -23 LUFS (EBU R128).
 
 ---
 
@@ -80,11 +69,10 @@ The select model is mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit
 **Task**: Implement .m4b creation from chapter audio
 **Research needed**: ffmpeg/MP4 container specifics
 
-- [ ] Research MP4/M4B container format
-- [ ] Identify how to embed chapter markers in M4B files
-- [ ] Determine ffmpeg commands for M4B creation with chapters
-- [ ] Test chapter marker format (Apple's chapter format vs alternatives)
-- [ ] Document M4B creation workflow
+- [x] Research MP4/M4B container format
+- [x] Identify how to embed chapter markers in M4B files
+- [x] Determine ffmpeg commands for M4B creation with chapters
+- [x] Document M4B creation workflow
 
 ---
 
@@ -92,10 +80,10 @@ The select model is mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit
 **Task**: Embed metadata (title, author)
 **Research needed**: MP4 tags
 
-- [ ] Research MP4 metadata tag format (iTunes-style tags)
-- [ ] Identify standard tags for audiobooks (©nam, ©ART, ©gen, etc.)
-- [ ] Determine ffmpeg commands for metadata embedding
-- [ ] Document metadata embedding strategy
+- [x] Research MP4 metadata tag format (iTunes-style tags)
+- [x] Identify standard tags for audiobooks (©nam, ©ART, ©gen, etc.)
+- [x] Determine ffmpeg commands for metadata embedding
+- [x] Document metadata embedding strategy
 
 ---
 
@@ -103,10 +91,12 @@ The select model is mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit
 **Task**: Embed cover image (if present)
 **Research needed**: MP4 cover tagging
 
-- [ ] Research how to embed cover images in M4B files
-- [ ] Identify correct ffmpeg commands for cover embedding
-- [ ] Determine optimal cover image dimensions and formats
-- [ ] Document cover embedding strategy
+- [x] Research how to embed cover images in M4B files
+- [x] Identify correct ffmpeg commands for cover embedding
+- [x] Determine optimal cover image dimensions and formats
+- [x] Document cover embedding strategy
+
+**Outcome**: [Research Complete](research/05_m4b_packaging_research.md). Identified FFmpeg `ffmetadata` format for chapters and specific iTunes tags (`stik=2`) for M4B compatibility.
 
 ---
 
@@ -114,12 +104,12 @@ The select model is mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit
 
 **Total Research Tasks**: 8
 
-| Phase | Research Tasks |
-|-------|---------------|
-| Phase 1 | 2 |
-| Phase 2 | 2 |
-| Phase 3 | 1 |
-| Phase 4 | 3 |
+| Phase | Research Tasks | Status |
+|-------|---------------|--------|
+| Phase 1 | 2 | Completed |
+| Phase 2 | 2 | Completed |
+| Phase 3 | 1 | Completed |
+| Phase 4 | 3 | Completed |
 
 ## Research Notes
 

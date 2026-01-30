@@ -70,7 +70,7 @@ Goal: Deterministic chunk caching, silence insertion, normalization, stitching t
 | [ ] | Deterministic chunk hashing (text + voice + model config) | Sequential | Medium | No | Cache key for reuse |
 | [ ] | Cache storage layout in `cache/` | Sequential | Medium | No | Must be resumable |
 | [ ] | Add silence insertion between chunks | Parallel | Medium | No | Use ffmpeg or audio lib |
-| [ ] | Add loudness normalization | Parallel | Hard | Yes (EBU R128 / ffmpeg filters) | Must be consistent |
+| [ ] | Add loudness normalization | Parallel | Hard | [Done](research/04_loudness_normalization_research.md) | Must be consistent |
 | [ ] | Stitch chunks into chapter-level audio | Sequential | Medium | No | Consumes cached chunks |
 
 Verification (Phase 3):
