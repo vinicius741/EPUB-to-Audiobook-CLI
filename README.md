@@ -69,6 +69,12 @@ epub2audio doctor
 
 This checks for GPU availability, model readiness, and runs a quick smoke test.
 
+**Doctor Options:**
+- `--smoke-test`: Run a basic synthesis smoke test
+- `--rtf-test`: Measure real-time factor for a short synthesis
+- `--long-text-test`: Run a long-text resilience test
+- `--verify`: Run all verification checks
+
 ### 3. Convert Books
 Process all EPUBs in the default `epubs/` directory:
 
@@ -81,6 +87,11 @@ Or specify individual files/folders:
 ```bash
 epub2audio my_book.epub another_folder/
 ```
+
+**Debug Options:**
+- `--debug`: Enable debug logging (sets both file and console to DEBUG)
+- `--verbose`, `-v`: Enable verbose console output (sets console to DEBUG, file logs remain at configured level)
+- `--log-level LEVEL`: Override log level (e.g. INFO, DEBUG, WARNING)
 
 ## Configuration
 

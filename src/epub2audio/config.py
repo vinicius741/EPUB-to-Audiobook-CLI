@@ -23,6 +23,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "out": "out",
         "cache": "cache",
         "logs": "logs",
+        "errors": "errors",
     },
     "logging": {
         "level": "INFO",
@@ -60,6 +61,7 @@ class PathsConfig:
     out: Path
     cache: Path
     logs: Path
+    errors: Path
 
 
 @dataclass(frozen=True)
@@ -128,6 +130,7 @@ def load_config(config_path: Path | None = None, *, cwd: Path | None = None) -> 
         out=_resolve_path(base_dir, merged["paths"]["out"]),
         cache=_resolve_path(base_dir, merged["paths"]["cache"]),
         logs=_resolve_path(base_dir, merged["paths"]["logs"]),
+        errors=_resolve_path(base_dir, merged["paths"].get("errors", "errors")),
     )
     logging = LoggingConfig(
         level=str(merged["logging"]["level"]).upper(),
@@ -170,6 +173,7 @@ def config_summary(config: Config) -> str:
         f"  out: {config.paths.out}\n"
         f"  cache: {config.paths.cache}\n"
         f"  logs: {config.paths.logs}\n"
+        f"  errors: {config.paths.errors}\n"
         f"  log level: {config.logging.level}\n"
         f"  console level: {config.logging.console_level}\n"
         "TTS\n"
@@ -256,6 +260,7 @@ epubs = "epubs"
 out = "out"
 cache = "cache"
 logs = "logs"
+errors = "errors"
 
 [logging]
 level = "INFO"

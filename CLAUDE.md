@@ -42,6 +42,12 @@ epub2audio init
 
 # Environment validation and TTS testing
 epub2audio doctor [--smoke-test] [--rtf-test] [--long-text-test] [--verify]
+
+# Debug options (available for all commands)
+epub2audio --debug                    # Full debug logging (file + console)
+epub2audio --verbose                  # Verbose console only (file stays at INFO)
+epub2audio -v                         # Short form of --verbose
+epub2audio --log-level DEBUG          # Override log level manually
 ```
 
 ### Testing
@@ -70,17 +76,19 @@ All core operations use Protocol/ABC patterns defined in `src/epub2audio/interfa
 
 ```
 src/epub2audio/
-├── cli/                    # CLI package (commands, parsers, rendering)
+├── cli/                    # CLI package (commands, parsers, rendering, progress)
 │   ├── __init__.py         # Package init, re-exports main()
 │   ├── main.py             # CLI entrypoint (subcommand routing)
 │   ├── commands.py         # Command runners (run_main, run_doctor, run_init)
 │   ├── parsers.py          # Argument parser builders
-│   └── rendering.py        # Output rendering functions
+│   ├── rendering.py        # Output rendering functions
+│   └── progress.py         # Progress display and output formatting
 ├── cli.py                  # Backward compatibility stub (re-exports from cli/)
 ├── pipeline.py             # Main orchestration (single/multiple book processing)
 ├── interfaces.py           # Protocol definitions and data classes
 ├── config.py               # TOML configuration loading + defaults
 ├── logging_setup.py        # Per-run and per-book logging
+├── error_log.py            # Structured error logging (ErrorLogStore, ErrorCategory)
 ├── state_store.py          # JSON-based state persistence
 │
 ├── epub_reader.py          # Ebooklib-based EPUB parsing
@@ -132,6 +140,38 @@ Per-book state stored in `cache/state/<book_slug>.json`:
 }
 ```
 
+### Structured Error Logging
+
+Per-book error logs stored in `errors/<book_slug>.json` for improved diagnostics:
+
+**Error Categories:** (from `ErrorCategory` enum in `error_log.py`)
+- EPUB parsing: `EPUB_PARSING`, `EPUB_INVALID`, `EPUB_METADATA`
+- Text processing: `TEXT_CLEANING`, `TEXT_SEGMENTATION`
+- TTS: `TTS_MODEL_LOAD`, `TTS_INPUT`, `TTS_SIZE`, `TTS_TRANSIENT`, `TTS_SYNTHESIS`
+- Audio: `AUDIO_SILENCE`, `AUDIO_NORMALIZATION`, `AUDIO_STITCHING`
+- Packaging: `PACKAGING`, `METADATA`
+- System: `FILE_IO`, `DISK_SPACE`, `PERMISSION`, `UNKNOWN`
+
+**Severity Levels:** `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+
+**Error Entry Structure:**
+```json
+{
+  "timestamp": "2026-01-30T12:00:00+00:00",
+  "category": "tts_synthesis",
+  "severity": "error",
+  "step": "synthesize_chapters",
+  "chapter_index": 3,
+  "message": "TTS synthesis failed for segment",
+  "details": {"segment_index": 42, "text_length": 500},
+  "exception_type": "RuntimeError",
+  "exception_message": "...",
+  "stack_trace": "..."
+}
+```
+
+The `ErrorLogStore` class manages error log persistence with atomic writes via `.json.tmp` files.
+
 ### Error Taxonomy (tts_engine.py)
 
 - `TtsInputError` - Empty or non-speech text
@@ -149,6 +189,8 @@ Key sections:
 - `[tts]` - engine, model_id, voice, speed, sample_rate, max_chars, retry/backoff settings
 - `[audio]` - silence_ms, normalize, target_lufs, lra, true_peak
 
+**Debug Flag Priority:** Command-line flags override config file settings in order: `--debug` > `--verbose` > `--log-level` > config file.
+
 ### Directory Layout
 
 ```
@@ -161,6 +203,7 @@ cache/
 ├── packaging/   # M4B intermediate files
 └── state/       # Per-book state JSON files
 logs/            # Run and per-book logs
+errors/          # Per-book error logs (JSON format for diagnostics)
 ```
 
 ## Important Patterns

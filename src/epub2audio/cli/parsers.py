@@ -26,6 +26,16 @@ def build_run_parser() -> argparse.ArgumentParser:
         type=str,
         help="Override log level (e.g. INFO, DEBUG)",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging (sets both file and console to DEBUG)",
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Enable verbose console output (sets console to DEBUG)",
+    )
     parser.add_argument("--version", action="version", version="epub2audio 0.1.0")
     return parser
 
@@ -45,6 +55,16 @@ def build_doctor_parser() -> argparse.ArgumentParser:
         "--log-level",
         type=str,
         help="Override log level (e.g. INFO, DEBUG)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging (sets both file and console to DEBUG)",
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Enable verbose console output (sets console to DEBUG)",
     )
     parser.add_argument(
         "--text",

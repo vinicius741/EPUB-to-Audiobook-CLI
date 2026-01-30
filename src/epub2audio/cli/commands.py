@@ -11,6 +11,7 @@ from ..doctor import DoctorOptions, run_doctor
 from ..logging_setup import initialize_logging
 from ..pipeline import BookResult, resolve_inputs, run_pipeline
 from ..utils import ensure_dir, generate_run_id
+from .progress import ProgressDisplay
 from .rendering import render_summary
 
 
@@ -22,7 +23,12 @@ def run_main(args: argparse.Namespace) -> int:
         print(str(exc))
         return 2
 
-    if args.log_level:
+    # Apply logging overrides in priority order: --debug > --verbose > --log-level
+    if getattr(args, "debug", False):
+        config = override_log_level(config, "DEBUG")
+    elif getattr(args, "verbose", False):
+        config = override_console_level(config, "DEBUG")
+    elif args.log_level:
         config = override_log_level(config, args.log_level)
 
     # Ensure required directories exist
@@ -35,14 +41,17 @@ def run_main(args: argparse.Namespace) -> int:
     logger = log_ctx.logger
 
     inputs = resolve_inputs(args.inputs)
-    logger.info("Starting stub run")
+    progress = ProgressDisplay()
+
     if not inputs:
         logger.info("No inputs provided")
-        print(render_summary(config, run_id, inputs, results=[]))
+        progress.print("No inputs found. Place EPUB files in the 'epubs/' folder.")
         return 0
 
-    results = run_pipeline(log_ctx, inputs, config)
-    print(render_summary(config, run_id, inputs, results))
+    results = run_pipeline(log_ctx, inputs, config, progress=progress)
+
+    # Print final summary using progress display
+    progress.print_summary(results)
     return 0
 
 
@@ -54,7 +63,12 @@ def run_doctor_cmd(args: argparse.Namespace) -> int:
         print(str(exc))
         return 2
 
-    if args.log_level:
+    # Apply logging overrides in priority order: --debug > --verbose > --log-level
+    if getattr(args, "debug", False):
+        config = override_log_level(config, "DEBUG")
+    elif getattr(args, "verbose", False):
+        config = override_console_level(config, "DEBUG")
+    elif args.log_level:
         config = override_log_level(config, args.log_level)
 
     options = DoctorOptions(
@@ -115,4 +129,13 @@ def run_init_cmd(args: argparse.Namespace) -> int:
 def override_log_level(config: Config, level: str) -> Config:
     """Override the logging configuration with a new log level."""
     logging_cfg = LoggingConfig(level=level.upper(), console_level=level.upper())
+    return replace(config, logging=logging_cfg)
+
+
+def override_console_level(config: Config, level: str) -> Config:
+    """Override only the console log level (file level remains unchanged)."""
+    logging_cfg = LoggingConfig(
+        level=config.logging.level,
+        console_level=level.upper(),
+    )
     return replace(config, logging=logging_cfg)

@@ -5,12 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import TYPE_CHECKING, Iterable, Sequence
 
 from .audio_cache import AudioCacheLayout
 from .audio_processing import FfmpegAudioProcessor, LoudnessConfig
 from .config import Config
 from .epub_reader import EbooklibEpubReader
+from .error_log import ErrorCategory, ErrorLogStore, ErrorSeverity
 from .interfaces import AudioChunk, Chapter, ChapterAudio, EpubBook, PipelineState
 from .logging_setup import LoggingContext
 from .packaging import FfmpegPackager
@@ -20,6 +21,9 @@ from .tts_engine import MlxTtsEngine, TtsError, TtsModelError
 from .tts_pipeline import TtsSynthesisSettings, synthesize_text
 from .state_store import JsonStateStore
 from .utils import ensure_dir, slugify
+
+if TYPE_CHECKING:
+    from .cli.progress import ProgressDisplay
 
 
 
@@ -43,6 +47,7 @@ def run_pipeline(
     log_ctx: LoggingContext,
     inputs: Sequence[Path],
     config: Config,
+    progress: "ProgressDisplay | None" = None,
 ) -> list[BookResult]:
     results: list[BookResult] = []
     reader = EbooklibEpubReader()
@@ -73,10 +78,22 @@ def run_pipeline(
     for source in sources:
         book_slug = slugify(source.stem if source.suffix else source.name)
         book_logger = log_ctx.get_book_logger(book_slug)
+        error_log = log_ctx.error_log_store.get_logger(book_slug, book_slug, log_ctx.run_id)
+
         if not source.exists():
             message = f"Input not found: {source}"
             book_logger.warning(message)
+            error_log.add_error(
+                ErrorCategory.FILE_IO,
+                ErrorSeverity.ERROR,
+                message,
+                step="input_validation",
+                details={"source_path": str(source)},
+            )
+            log_ctx.error_log_store.save(error_log)
             results.append(BookResult(source=source, book_slug=book_slug, status="missing", message=message))
+            if progress:
+                progress.print_book_missing(source)
             continue
 
         try:
@@ -84,11 +101,23 @@ def run_pipeline(
         except Exception as exc:
             message = f"Failed to read EPUB: {exc}"
             book_logger.error(message)
+            error_log.add_error(
+                ErrorCategory.EPUB_PARSING,
+                ErrorSeverity.ERROR,
+                message,
+                step="epub_read",
+                details={"source_path": str(source)},
+                exc=exc,
+            )
+            log_ctx.error_log_store.save(error_log)
             results.append(BookResult(source=source, book_slug=book_slug, status="failed", message=message))
+            if progress:
+                progress.print_book_failed(book_slug, source.name, message)
             continue
 
         book_slug = slugify(book.metadata.title or book_slug)
         book_logger = log_ctx.get_book_logger(book_slug)
+        error_log = log_ctx.error_log_store.get_logger(book_slug, book_slug, log_ctx.run_id)
         book_logger.info("Processing %s with %d chapter(s)", book.metadata.title, len(book.chapters))
         state = _load_or_init_state(state_store, book_slug, source, book_logger)
         out_path = _resolve_output_path(config.paths.out, book_slug)
@@ -110,11 +139,17 @@ def run_pipeline(
                         output_path=out_path,
                     )
                 )
+                if progress:
+                    progress.print_book_skipped(book_slug, book.metadata.title or book_slug, out_path)
                 _cleanup_cover_image(book.metadata.cover_image, book_logger)
                 continue
             book_logger.info("State marked packaged but output missing; reprocessing.")
             state = _state_with(state, steps={"packaged": False})
             _save_state(state_store, state, book_logger)
+
+        # Signal that we're starting to process this book
+        if progress:
+            progress.print_processing(book_slug, book.metadata.title or book_slug, len(book.chapters))
 
         try:
             chapter_results = _process_book(
@@ -129,13 +164,27 @@ def run_pipeline(
                 config,
                 output_format,
                 book_logger,
+                error_log,
+                progress,
             )
         except Exception as exc:
             message = f"Failed during audio pipeline: {exc}"
             book_logger.error(message)
-            state = _state_with(state, artifacts={"last_error": message})
+            error_log.add_error(
+                ErrorCategory.TTS_SYNTHESIS,
+                ErrorSeverity.ERROR,
+                message,
+                step="audio_pipeline",
+                details={"chapter_count": len(book.chapters)},
+                exc=exc,
+            )
+            log_ctx.error_log_store.save(error_log)
+            error_log_path = log_ctx.error_log_store._path_for(book_slug)
+            state = _state_with(state, artifacts={"last_error": message, "error_log": str(error_log_path)})
             _save_state(state_store, state, book_logger)
             results.append(BookResult(source=source, book_slug=book_slug, status="failed", message=message))
+            if progress:
+                progress.print_book_failed(book_slug, book.metadata.title or book_slug, message)
             continue
 
         ok_count = sum(1 for r in chapter_results if r.status == "ok")
@@ -153,6 +202,8 @@ def run_pipeline(
         chapter_audio = _collect_chapter_audio(book, chapter_results, book_logger)
         if not chapter_audio:
             results.append(BookResult(source=source, book_slug=book_slug, status="ok", message=message))
+            if progress:
+                progress.print_book_complete(book_slug, book.metadata.title or book_slug)
             _cleanup_cover_image(book.metadata.cover_image, book_logger)
             continue
 
@@ -167,9 +218,21 @@ def run_pipeline(
             )
         except Exception as exc:
             fail_message = f"{message} Packaging failed: {exc}"
+            error_log.add_error(
+                ErrorCategory.PACKAGING,
+                ErrorSeverity.ERROR,
+                fail_message,
+                step="packaging",
+                details={"output_path": str(out_path)},
+                exc=exc,
+            )
+            log_ctx.error_log_store.save(error_log)
+            error_log_path = log_ctx.error_log_store._path_for(book_slug)
             results.append(BookResult(source=source, book_slug=book_slug, status="failed", message=fail_message))
-            state = _state_with(state, artifacts={"last_error": fail_message})
+            state = _state_with(state, artifacts={"last_error": fail_message, "error_log": str(error_log_path)})
             _save_state(state_store, state, book_logger)
+            if progress:
+                progress.print_book_failed(book_slug, book.metadata.title or book_slug, fail_message)
             _cleanup_cover_image(book.metadata.cover_image, book_logger)
             continue
 
@@ -180,9 +243,12 @@ def run_pipeline(
             artifacts={"output_m4b": str(packaged), "last_error": ""},
         )
         _save_state(state_store, state, book_logger)
+        log_ctx.error_log_store.save(error_log)
         results.append(
             BookResult(source=source, book_slug=book_slug, status="ok", message=final_message, output_path=packaged)
         )
+        if progress:
+            progress.print_book_complete(book_slug, book.metadata.title or book_slug)
         _cleanup_cover_image(book.metadata.cover_image, book_logger)
 
     return results
@@ -261,10 +327,20 @@ def _process_book(
     config: Config,
     output_format: str,
     logger: logging.Logger,
+    error_log,
+    progress: "ProgressDisplay | None" = None,
 ) -> list[ChapterResult]:
     cache.ensure_chapter_dir(book_slug)
     chapter_results: list[ChapterResult] = []
+    total_chapters = len(book.chapters)
     for chapter in book.chapters:
+        # Emit chapter progress
+        if progress:
+            progress.print_chapter_progress(
+                chapter.index,
+                chapter.title,
+                total_chapters,
+            )
         chapter_results.append(
             _process_chapter(
                 chapter,
@@ -278,6 +354,7 @@ def _process_book(
                 config,
                 output_format,
                 logger,
+                error_log,
             )
         )
     return chapter_results
@@ -352,6 +429,7 @@ def _process_chapter(
     config: Config,
     output_format: str,
     logger: logging.Logger,
+    error_log,
 ) -> ChapterResult:
     stitched_path = cache.chapter_path(book_slug, chapter.index, "stitched")
     normalized_path = stitched_path.with_name(f"{stitched_path.stem}.normalized.wav")
@@ -362,7 +440,16 @@ def _process_chapter(
 
     cleaned = cleaner.clean(chapter.text)
     if not cleaned:
-        logger.warning("Chapter %d is empty after cleaning; skipping.", chapter.index)
+        message = f"Chapter {chapter.index} is empty after cleaning; skipping."
+        logger.warning(message)
+        error_log.add_error(
+            ErrorCategory.TEXT_CLEANING,
+            ErrorSeverity.WARNING,
+            message,
+            step="text_cleaning",
+            chapter_index=chapter.index,
+            details={"chapter_title": chapter.title},
+        )
         return ChapterResult(chapter_index=chapter.index, status="empty", output_paths=())
 
     try:
@@ -377,23 +464,81 @@ def _process_chapter(
             logger=logger,
         )
     except TtsError as exc:
-        logger.error("TTS failed for chapter %d: %s", chapter.index, exc)
+        message = f"TTS failed for chapter {chapter.index}: {exc}"
+        logger.error(message)
+        error_log.add_error(
+            ErrorCategory.TTS_SYNTHESIS,
+            ErrorSeverity.ERROR,
+            message,
+            step="tts_synthesis",
+            chapter_index=chapter.index,
+            details={"chapter_title": chapter.title},
+            exc=exc,
+        )
         return ChapterResult(chapter_index=chapter.index, status="failed", output_paths=())
 
     if not chunks:
-        logger.warning("No audio chunks generated for chapter %d.", chapter.index)
+        message = f"No audio chunks generated for chapter {chapter.index}."
+        logger.warning(message)
+        error_log.add_error(
+            ErrorCategory.TTS_SYNTHESIS,
+            ErrorSeverity.WARNING,
+            message,
+            step="tts_synthesis",
+            chapter_index=chapter.index,
+            details={"chapter_title": chapter.title},
+        )
         return ChapterResult(chapter_index=chapter.index, status="empty", output_paths=())
 
     processed_chunks: Sequence[AudioChunk] = chunks
     if config.audio.silence_ms > 0:
-        processed_chunks = audio_processor.insert_silence(chunks, config.audio.silence_ms)
+        try:
+            processed_chunks = audio_processor.insert_silence(chunks, config.audio.silence_ms)
+        except Exception as exc:
+            message = f"Failed to insert silence for chapter {chapter.index}: {exc}"
+            error_log.add_error(
+                ErrorCategory.AUDIO_SILENCE,
+                ErrorSeverity.ERROR,
+                message,
+                step="silence_insertion",
+                chapter_index=chapter.index,
+                details={"silence_ms": config.audio.silence_ms},
+                exc=exc,
+            )
+            return ChapterResult(chapter_index=chapter.index, status="failed", output_paths=())
 
-    audio_processor.stitch(processed_chunks, stitched_path)
+    try:
+        audio_processor.stitch(processed_chunks, stitched_path)
+    except Exception as exc:
+        message = f"Failed to stitch audio for chapter {chapter.index}: {exc}"
+        error_log.add_error(
+            ErrorCategory.AUDIO_STITCHING,
+            ErrorSeverity.ERROR,
+            message,
+            step="audio_stitching",
+            chapter_index=chapter.index,
+            details={"stitched_path": str(stitched_path)},
+            exc=exc,
+        )
+        return ChapterResult(chapter_index=chapter.index, status="failed", output_paths=())
 
     if not config.audio.normalize:
         return ChapterResult(chapter_index=chapter.index, status="ok", output_paths=(stitched_path,))
 
-    normalized = audio_processor.normalize([AudioChunk(index=0, path=stitched_path)])
+    try:
+        normalized = audio_processor.normalize([AudioChunk(index=0, path=stitched_path)])
+    except Exception as exc:
+        message = f"Failed to normalize audio for chapter {chapter.index}: {exc}"
+        error_log.add_error(
+            ErrorCategory.AUDIO_NORMALIZATION,
+            ErrorSeverity.ERROR,
+            message,
+            step="audio_normalization",
+            chapter_index=chapter.index,
+            details={"stitched_path": str(stitched_path)},
+            exc=exc,
+        )
+        return ChapterResult(chapter_index=chapter.index, status="failed", output_paths=())
     return ChapterResult(chapter_index=chapter.index, status="ok", output_paths=(normalized[0].path,))
 
 

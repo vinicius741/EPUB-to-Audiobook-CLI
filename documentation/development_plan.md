@@ -115,11 +115,11 @@ Goal: Finish CLI behavior and default folders; add init/doctor and UX polish.
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
-| [ ] | Ensure folder auto-creation (epubs/, out/, cache/) | Sequential | Easy | No | Core UX |
+| [x] | Ensure folder auto-creation (epubs/, out/, cache/) | Sequential | Easy | No | Core UX |
 | [x] | Implement `epub2audio init` | Parallel | Medium | No | Creates folders + optional config |
-| [ ] | Implement quiet-by-default output + progress indicators | Parallel | Medium | No | Calm, readable output |
-| [ ] | Add structured error logs per book | Parallel | Medium | No | Improves diagnostics |
-| [ ] | Add minimal debug flags (optional) | Parallel | Easy | No | Keep defaults zero-config |
+| [x] | Implement quiet-by-default output + progress indicators | Parallel | Medium | No | Calm, readable output |
+| [x] | Add structured error logs per book | Parallel | Medium | No | Improves diagnostics |
+| [x] | Add minimal debug flags (optional) | Parallel | Easy | No | Keep defaults zero-config |
 
 Verification (Phase 6):
 - Running `epub2audio` with no args processes all ./epubs
@@ -131,7 +131,7 @@ Goal: Improve reliability, add tests, and document usage.
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
-| [ ] | Add unit tests for segmenter + hash + state | Parallel | Medium | No | Deterministic tests |
+| [x] | Add unit tests for segmenter + hash + state | Parallel | Medium | No | Deterministic tests |
 | [ ] | Add integration test for EPUB -> m4b (sample) | Sequential | Hard | No | Requires sample EPUB |
 | [ ] | Add failure-case tests (bad EPUB, TTS fail) | Parallel | Medium | No | Ensures resilience |
 | [ ] | Write README usage + defaults | Parallel | Easy | No | User onboarding |

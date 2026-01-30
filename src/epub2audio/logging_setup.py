@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Config
+from .error_log import ErrorLogStore
 from .utils import ensure_dir, slugify
 
 
@@ -18,6 +19,7 @@ class LoggingContext:
     console_level: int
     logger: logging.Logger
     formatter: logging.Formatter
+    error_log_store: ErrorLogStore
 
     def get_book_logger(self, book_slug: str) -> logging.Logger:
         safe_slug = slugify(book_slug)
@@ -62,6 +64,10 @@ def initialize_logging(config: Config, run_id: str) -> LoggingContext:
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
+    # Initialize structured error log store
+    error_log_dir = ensure_dir(config.paths.errors)
+    error_log_store = ErrorLogStore(error_log_dir)
+
     return LoggingContext(
         root_dir=root_dir,
         run_id=run_id,
@@ -69,6 +75,7 @@ def initialize_logging(config: Config, run_id: str) -> LoggingContext:
         console_level=console_level,
         logger=logger,
         formatter=formatter,
+        error_log_store=error_log_store,
     )
 
 
