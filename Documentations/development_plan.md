@@ -29,8 +29,8 @@ Goal: Extract chapters in correct order, clean/normalize text, segment into safe
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
-| [ ] | Implement EPUB reader + TOC/reading order extraction | Sequential | Hard | [Done](research/01_epub_parsing_research.md) | Critical correctness task |
-| [ ] | Extract metadata (title, author, cover) | Parallel | Medium | Yes (EPUB metadata fields) | Needed for packaging |
+| [x] | Implement EPUB reader + TOC/reading order extraction | Sequential | Hard | [Done](research/01_epub_parsing_research.md) | Critical correctness task |
+| [ ] | Extract metadata (title, author, cover) | Parallel | Medium | [Done](research/02_epub_metadata_research.md) | Needed for packaging |
 | [ ] | Build text cleaner/normalizer (whitespace, unicode normalization, citations) | Parallel | Medium | No | Keep defaults conservative |
 | [ ] | Implement text segmenter with punctuation + length rules | Sequential | Medium | No | Used by TTS and caching |
 | [ ] | Add chunk retry/split logic on synth failure (design) | Parallel | Medium | No | Used in Phase 2 |

@@ -23,11 +23,11 @@ This document tracks all research tasks identified in the development plan that 
 **Task**: Extract metadata (title, author, cover)
 **Research needed**: EPUB metadata fields
 
-- [ ] Research EPUB metadata format and fields (dc:title, dc:creator, etc.)
-- [ ] Identify all standard metadata fields available
-- [ ] Understand cover image extraction from EPUB
-- [ ] Document metadata extraction strategy
-- [ ] Identify edge cases (missing metadata, multiple authors, etc.)
+- [x] Research EPUB metadata format and fields (dc:title, dc:creator, etc.)
+- [x] Identify all standard metadata fields available
+- [x] Understand cover image extraction from EPUB
+- [x] Document metadata extraction strategy
+- [x] Identify edge cases (missing metadata, multiple authors, etc.)
 
 ---
 
