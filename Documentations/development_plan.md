@@ -48,10 +48,11 @@ Goal: Add TTS engine interface, default local model, and chunk synthesis flow.
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
 | [ ] | Define TTS interface (synthesize(text, voice, config) -> audio) | Sequential | Medium | No | Enables swappable engines |
-| [ ] | Select and integrate default local TTS model | Sequential | Hard | [Done](research/03_tts_model_research.md) | Must be zero-config |
-| [ ] | Implement chunk synthesis pipeline using TTS interface | Sequential | Medium | No | Uses segmenter outputs |
-| [ ] | Add failure retry by splitting chunk | Parallel | Medium | No | Use exponential backoff / split strategy |
-| [ ] | Add CLI `doctor` checks for TTS model loadability | Parallel | Medium | [Done](research/03_tts_model_research.md) | Improves UX |
+| [x] | Define TTS interface (synthesize(text, voice, config) -> audio) | Sequential | Medium | No | Enables swappable engines |
+| [x] | Select and integrate default local TTS model | Sequential | Hard | [Done](research/03_tts_model_research.md) | Must be zero-config |
+| [x] | Implement chunk synthesis pipeline using TTS interface | Sequential | Medium | No | Uses segmenter outputs |
+| [x] | Add failure retry by splitting chunk | Parallel | Medium | No | Use exponential backoff / split strategy |
+| [x] | Add CLI `doctor` checks for TTS model loadability | Parallel | Medium | [Done](research/03_tts_model_research.md) | Improves UX |
 
 Verification (Phase 2):
 - **Environment Validation**: `epub2audio doctor` confirms Metal/GPU usage, sufficient RAM (>4GB detected), and model cache presence.

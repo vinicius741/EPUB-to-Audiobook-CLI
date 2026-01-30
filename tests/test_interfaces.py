@@ -40,7 +40,7 @@ class DummyTts:
         self,
         text: str,
         voice: str | None = None,
-        config: Mapping[str, str] | None = None,
+        config: Mapping[str, object] | None = None,
     ) -> AudioChunk:
         return AudioChunk(index=0, path=Path("audio.wav"))
 

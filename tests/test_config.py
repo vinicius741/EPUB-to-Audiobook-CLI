@@ -15,6 +15,9 @@ def test_load_config_defaults(tmp_path: Path) -> None:
     assert config.paths.cache == tmp_path / "cache"
     assert config.paths.logs == tmp_path / "logs"
     assert config.logging.level == "INFO"
+    assert config.tts.engine == "mlx"
+    assert config.tts.sample_rate == 24000
+    assert config.tts.channels == 1
 
 
 def test_load_config_overrides(tmp_path: Path) -> None:
@@ -28,6 +31,11 @@ epubs = "input"
 [logging]
 level = "debug"
 console_level = "warning"
+[tts]
+engine = "mlx"
+voice = "narrator"
+sample_rate = 44100
+channels = 2
 """.lstrip()
     )
 
@@ -36,6 +44,9 @@ console_level = "warning"
     assert config.paths.epubs == config_dir / "input"
     assert config.logging.level == "DEBUG"
     assert config.logging.console_level == "WARNING"
+    assert config.tts.voice == "narrator"
+    assert config.tts.sample_rate == 44100
+    assert config.tts.channels == 2
 
 
 def test_missing_config_raises(tmp_path: Path) -> None:

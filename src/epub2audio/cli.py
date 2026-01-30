@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
 from .config import Config, LoggingConfig, config_summary, load_config
+from .doctor import DoctorOptions, run_doctor
 from .logging_setup import initialize_logging
 from .pipeline import resolve_inputs, run_pipeline
 from .utils import generate_run_id
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    argv = list(argv) if argv is not None else sys.argv[1:]
+    if argv and argv[0] == "doctor":
+        args = build_doctor_parser().parse_args(argv[1:])
+        return _run_doctor(args)
+
+    args = build_run_parser().parse_args(argv)
 
     try:
         config = load_config(args.config, cwd=Path.cwd())
@@ -42,7 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_run_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="epub2audio",
         description="EPUB to Audiobook CLI (Phase 0 stub)",
@@ -67,9 +73,79 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_doctor_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="epub2audio doctor",
+        description="Check TTS environment and model readiness",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to config.toml (optional)",
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        help="Override log level (e.g. INFO, DEBUG)",
+    )
+    parser.add_argument(
+        "--text",
+        type=str,
+        default="Hello world.",
+        help="Text to synthesize for smoke/RTF tests",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Directory to write doctor audio output",
+    )
+    parser.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Run a basic synthesis smoke test",
+    )
+    parser.add_argument(
+        "--rtf-test",
+        action="store_true",
+        help="Measure real-time factor for a short synthesis",
+    )
+    parser.add_argument(
+        "--long-text-test",
+        action="store_true",
+        help="Run a long-text resilience test",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Run all verification checks",
+    )
+    return parser
+
+
 def _override_log_level(config: Config, level: str) -> Config:
     logging_cfg = LoggingConfig(level=level.upper(), console_level=level.upper())
     return replace(config, logging=logging_cfg)
+
+
+def _run_doctor(args: argparse.Namespace) -> int:
+    try:
+        config = load_config(args.config, cwd=Path.cwd())
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(str(exc))
+        return 2
+
+    if args.log_level:
+        config = _override_log_level(config, args.log_level)
+
+    options = DoctorOptions(
+        smoke_test=args.smoke_test,
+        long_text_test=args.long_text_test,
+        rtf_test=args.rtf_test,
+        verify=args.verify,
+        text=args.text,
+        output_dir=args.output_dir,
+    )
+    return run_doctor(config, options)
 
 
 def _render_summary(

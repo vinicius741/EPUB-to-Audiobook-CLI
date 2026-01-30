@@ -72,7 +72,7 @@ class TtsEngine(Protocol):
         self,
         text: str,
         voice: str | None = None,
-        config: Mapping[str, str] | None = None,
+        config: Mapping[str, object] | None = None,
     ) -> AudioChunk:  # pragma: no cover - interface
         ...
 

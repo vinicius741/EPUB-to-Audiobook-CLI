@@ -149,6 +149,7 @@ config.toml
 epubs/
 out/
 cache/
+my_cache/
 
 # Input/output files
 *.epub

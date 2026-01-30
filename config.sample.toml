@@ -13,7 +13,25 @@ logs = "logs"
 level = "INFO"
 console_level = "INFO"
 
-# Placeholder for future options (not wired yet):
-#[tts]
-#engine = "local"
-#voice = "default"
+[tts]
+# Default MLX engine for Apple Silicon
+engine = "mlx"
+model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
+
+# Optional voice + language (engine-specific)
+# voice = "default"
+# lang_code = "en"
+
+# Playback characteristics
+speed = 1.0
+sample_rate = 24000
+channels = 1
+
+# Chunking + retry controls
+max_chars = 1000
+min_chars = 200
+hard_max_chars = 1250
+max_retries = 2
+backoff_base = 0.5
+backoff_jitter = 0.1
+output_format = "wav"
