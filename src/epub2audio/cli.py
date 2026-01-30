@@ -11,7 +11,7 @@ from typing import Sequence
 from .config import Config, LoggingConfig, config_summary, load_config
 from .doctor import DoctorOptions, run_doctor
 from .logging_setup import initialize_logging
-from .pipeline import resolve_inputs, run_pipeline
+from .pipeline import BookResult, resolve_inputs, run_pipeline
 from .utils import generate_run_id
 
 
@@ -170,4 +170,21 @@ def _render_summary(
 def _render_results_summary(results: Sequence[object]) -> str:
     if not results:
         return "No inputs provided. Nothing processed yet."
-    return f"Processed {len(results)} item(s)."
+    if not all(isinstance(result, BookResult) for result in results):
+        return f"Processed {len(results)} item(s)."
+
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+
+    summary = ["Results"]
+    summary.append(
+        "  "
+        + ", ".join(f"{status}={count}" for status, count in sorted(counts.items()))
+    )
+    for result in results:
+        line = f"  - {result.book_slug}: {result.status}"
+        if result.output_path is not None:
+            line += f" -> {result.output_path}"
+        summary.append(line)
+    return "\n".join(summary)

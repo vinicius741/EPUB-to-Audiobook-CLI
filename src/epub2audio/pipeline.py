@@ -11,13 +11,14 @@ from .audio_cache import AudioCacheLayout
 from .audio_processing import FfmpegAudioProcessor, LoudnessConfig
 from .config import Config
 from .epub_reader import EbooklibEpubReader
-from .interfaces import AudioChunk, Chapter, ChapterAudio, EpubBook
+from .interfaces import AudioChunk, Chapter, ChapterAudio, EpubBook, PipelineState
 from .logging_setup import LoggingContext
 from .packaging import FfmpegPackager
 from .text_cleaner import BasicTextCleaner
 from .text_segmenter import BasicTextSegmenter
 from .tts_engine import MlxTtsEngine, TtsError, TtsModelError
 from .tts_pipeline import TtsSynthesisSettings, synthesize_text
+from .state_store import JsonStateStore
 from .utils import ensure_dir, slugify
 
 
@@ -66,6 +67,7 @@ def run_pipeline(
         ),
     )
     packager = FfmpegPackager(work_dir=ensure_dir(config.paths.cache / "packaging"))
+    state_store = JsonStateStore(ensure_dir(config.paths.cache / "state"))
 
     sources = _expand_inputs(inputs)
     for source in sources:
@@ -88,6 +90,31 @@ def run_pipeline(
         book_slug = slugify(book.metadata.title or book_slug)
         book_logger = log_ctx.get_book_logger(book_slug)
         book_logger.info("Processing %s with %d chapter(s)", book.metadata.title, len(book.chapters))
+        state = _load_or_init_state(state_store, book_slug, source, book_logger)
+        out_path = _resolve_output_path(config.paths.out, book_slug)
+
+        if state.steps.get("packaged"):
+            if out_path.exists():
+                message = f"Already packaged: {out_path}"
+                state = _state_with(
+                    state,
+                    artifacts={"output_m4b": str(out_path)},
+                )
+                _save_state(state_store, state, book_logger)
+                results.append(
+                    BookResult(
+                        source=source,
+                        book_slug=book_slug,
+                        status="skipped",
+                        message=message,
+                        output_path=out_path,
+                    )
+                )
+                _cleanup_cover_image(book.metadata.cover_image, book_logger)
+                continue
+            book_logger.info("State marked packaged but output missing; reprocessing.")
+            state = _state_with(state, steps={"packaged": False})
+            _save_state(state_store, state, book_logger)
 
         try:
             chapter_results = _process_book(
@@ -106,6 +133,8 @@ def run_pipeline(
         except Exception as exc:
             message = f"Failed during audio pipeline: {exc}"
             book_logger.error(message)
+            state = _state_with(state, artifacts={"last_error": message})
+            _save_state(state_store, state, book_logger)
             results.append(BookResult(source=source, book_slug=book_slug, status="failed", message=message))
             continue
 
@@ -113,6 +142,13 @@ def run_pipeline(
         empty_count = sum(1 for r in chapter_results if r.status == "empty")
         failed_count = sum(1 for r in chapter_results if r.status == "failed")
         message = f"Generated {ok_count} chapter(s), {empty_count} empty, {failed_count} failed."
+        chapters_ok = failed_count == 0
+        state = _state_with(
+            state,
+            steps={"chapters": chapters_ok},
+            artifacts={"chapter_dir": str(cache.chapter_dir / book_slug)},
+        )
+        _save_state(state_store, state, book_logger)
 
         chapter_audio = _collect_chapter_audio(book, chapter_results, book_logger)
         if not chapter_audio:
@@ -132,10 +168,18 @@ def run_pipeline(
         except Exception as exc:
             fail_message = f"{message} Packaging failed: {exc}"
             results.append(BookResult(source=source, book_slug=book_slug, status="failed", message=fail_message))
+            state = _state_with(state, artifacts={"last_error": fail_message})
+            _save_state(state_store, state, book_logger)
             _cleanup_cover_image(book.metadata.cover_image, book_logger)
             continue
 
         final_message = f"{message} Packaged: {packaged}"
+        state = _state_with(
+            state,
+            steps={"packaged": True},
+            artifacts={"output_m4b": str(packaged), "last_error": ""},
+        )
+        _save_state(state_store, state, book_logger)
         results.append(
             BookResult(source=source, book_slug=book_slug, status="ok", message=final_message, output_path=packaged)
         )
@@ -309,17 +353,17 @@ def _process_chapter(
     output_format: str,
     logger: logging.Logger,
 ) -> ChapterResult:
-    cleaned = cleaner.clean(chapter.text)
-    if not cleaned:
-        logger.warning("Chapter %d is empty after cleaning; skipping.", chapter.index)
-        return ChapterResult(chapter_index=chapter.index, status="empty", output_paths=())
-
     stitched_path = cache.chapter_path(book_slug, chapter.index, "stitched")
     normalized_path = stitched_path.with_name(f"{stitched_path.stem}.normalized.wav")
     if config.audio.normalize and normalized_path.exists() and normalized_path.stat().st_size > 0:
         return ChapterResult(chapter_index=chapter.index, status="ok", output_paths=(normalized_path,))
     if not config.audio.normalize and stitched_path.exists() and stitched_path.stat().st_size > 0:
         return ChapterResult(chapter_index=chapter.index, status="ok", output_paths=(stitched_path,))
+
+    cleaned = cleaner.clean(chapter.text)
+    if not cleaned:
+        logger.warning("Chapter %d is empty after cleaning; skipping.", chapter.index)
+        return ChapterResult(chapter_index=chapter.index, status="empty", output_paths=())
 
     try:
         chunks = synthesize_text(
@@ -351,3 +395,52 @@ def _process_chapter(
 
     normalized = audio_processor.normalize([AudioChunk(index=0, path=stitched_path)])
     return ChapterResult(chapter_index=chapter.index, status="ok", output_paths=(normalized[0].path,))
+
+
+def _load_or_init_state(
+    store: JsonStateStore,
+    book_id: str,
+    source: Path,
+    logger: logging.Logger,
+) -> PipelineState:
+    try:
+        state = store.load(book_id)
+    except Exception as exc:
+        logger.warning("State load failed; starting fresh: %s", exc)
+        state = None
+    if state is None:
+        state = PipelineState(
+            book_id=book_id,
+            steps={"chapters": False, "packaged": False},
+            artifacts={"source_path": str(source)},
+        )
+        _save_state(store, state, logger)
+        return state
+    artifacts = dict(state.artifacts or {})
+    artifacts.setdefault("source_path", str(source))
+    steps = dict(state.steps)
+    steps.setdefault("chapters", False)
+    steps.setdefault("packaged", False)
+    return PipelineState(book_id=state.book_id, steps=steps, artifacts=artifacts)
+
+
+def _state_with(
+    state: PipelineState,
+    *,
+    steps: dict[str, bool] | None = None,
+    artifacts: dict[str, str] | None = None,
+) -> PipelineState:
+    new_steps = dict(state.steps)
+    if steps:
+        new_steps.update(steps)
+    new_artifacts = dict(state.artifacts or {})
+    if artifacts:
+        new_artifacts.update(artifacts)
+    return PipelineState(book_id=state.book_id, steps=new_steps, artifacts=new_artifacts)
+
+
+def _save_state(store: JsonStateStore, state: PipelineState, logger: logging.Logger) -> None:
+    try:
+        store.save(state)
+    except Exception as exc:
+        logger.warning("State save failed: %s", exc)

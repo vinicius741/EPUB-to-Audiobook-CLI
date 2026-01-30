@@ -99,11 +99,11 @@ Goal: Durable per-book state tracking, safe resumability, and error isolation.
 
 | Status | Task | Parallel? | Difficulty | Research? | Notes/Dependencies |
 |---|---|---|---|---|---|
-| [ ] | Define state file schema (JSON/TOML) | Sequential | Medium | No | Tracks pipeline progress |
-| [ ] | Record per-step completion in state file | Sequential | Medium | No | Required for resume |
-| [ ] | Skip completed steps on re-run | Sequential | Medium | No | Deterministic behavior |
-| [ ] | Ensure per-book errors don’t halt others | Parallel | Medium | No | Process remaining books |
-| [ ] | Final summary report (success/fail, output paths) | Parallel | Medium | No | Needed for UX |
+| [x] | Define state file schema (JSON/TOML) | Sequential | Medium | No | Tracks pipeline progress |
+| [x] | Record per-step completion in state file | Sequential | Medium | No | Required for resume |
+| [x] | Skip completed steps on re-run | Sequential | Medium | No | Deterministic behavior |
+| [x] | Ensure per-book errors don’t halt others | Parallel | Medium | No | Process remaining books |
+| [x] | Final summary report (success/fail, output paths) | Parallel | Medium | No | Needed for UX |
 
 Verification (Phase 5):
 - Interrupt mid-run and resume without redoing work
