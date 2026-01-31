@@ -44,6 +44,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "backoff_base": 0.5,
         "backoff_jitter": 0.1,
         "output_format": "wav",
+        "chapter_workers": "auto",
+        "chapter_parallelism": "thread",
+        "unsafe_mlx_parallelism": False,
     },
     "audio": {
         "silence_ms": 250,
@@ -86,6 +89,9 @@ class TtsConfig:
     backoff_base: float
     backoff_jitter: float
     output_format: str
+    chapter_workers: int | None
+    chapter_parallelism: str
+    unsafe_mlx_parallelism: bool
 
 
 @dataclass(frozen=True)
@@ -152,6 +158,9 @@ def load_config(config_path: Path | None = None, *, cwd: Path | None = None) -> 
         backoff_base=float(tts_raw.get("backoff_base", 0.5)),
         backoff_jitter=float(tts_raw.get("backoff_jitter", 0.1)),
         output_format=str(tts_raw.get("output_format", "wav")).lower(),
+        chapter_workers=_optional_workers(tts_raw.get("chapter_workers")),
+        chapter_parallelism=_optional_parallelism(tts_raw.get("chapter_parallelism")),
+        unsafe_mlx_parallelism=bool(tts_raw.get("unsafe_mlx_parallelism", False)),
     )
     audio_raw = merged.get("audio", {})
     audio = AudioConfig(
@@ -189,6 +198,9 @@ def config_summary(config: Config) -> str:
         f"  hard_max_chars: {config.tts.hard_max_chars or 'auto'}\n"
         f"  max_retries: {config.tts.max_retries}\n"
         f"  output_format: {config.tts.output_format}\n"
+        f"  chapter_workers: {config.tts.chapter_workers or 'auto'}\n"
+        f"  chapter_parallelism: {config.tts.chapter_parallelism}\n"
+        f"  unsafe_mlx_parallelism: {config.tts.unsafe_mlx_parallelism}\n"
         "Audio\n"
         f"  silence_ms: {config.audio.silence_ms}\n"
         f"  normalize: {config.audio.normalize}\n"
@@ -246,6 +258,36 @@ def _optional_int(value: Any) -> int | None:
         return None
 
 
+def _optional_workers(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        if not cleaned or cleaned in {"auto", "none", "null"}:
+            return None
+        value = cleaned
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _optional_parallelism(value: Any) -> str:
+    if value is None:
+        return "thread"
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        if not cleaned:
+            return "thread"
+        if cleaned in {"thread", "threads"}:
+            return "thread"
+        if cleaned in {"process", "processes"}:
+            return "process"
+        return cleaned
+    return str(value).strip().lower() or "thread"
+
+
 def write_default_config(path: Path) -> None:
     """Write the default config.toml file.
 
@@ -281,6 +323,9 @@ max_retries = 2
 backoff_base = 0.5
 backoff_jitter = 0.1
 output_format = "wav"
+chapter_workers = "auto"
+chapter_parallelism = "thread"
+unsafe_mlx_parallelism = false
 
 [audio]
 silence_ms = 250

@@ -35,6 +35,9 @@ max_retries = 2
 backoff_base = 0.5
 backoff_jitter = 0.1
 output_format = "wav"
+chapter_workers = "auto"
+chapter_parallelism = "thread"
+unsafe_mlx_parallelism = false
 
 [audio]
 # Silence between chunks (milliseconds)

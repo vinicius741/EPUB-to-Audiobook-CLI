@@ -103,6 +103,20 @@ class ProgressDisplay:
         if self._current_book:
             self._current_book.completed_chapters = chapter_index
 
+    def print_chapter_complete(
+        self,
+        chapter_index: int,
+        chapter_title: str,
+        total_chapters: int,
+        status: str,
+    ) -> None:
+        """Print chapter completion status."""
+        truncated_title = _truncate_title(chapter_title, 30)
+        self.print(f"  [Chapter {chapter_index}/{total_chapters}] {truncated_title} -> {status}")
+
+        if self._current_book:
+            self._current_book.completed_chapters += 1
+
     def print_book_complete(self, book_slug: str, title: str) -> None:
         """Print that a book is complete with duration."""
         if self._current_book:

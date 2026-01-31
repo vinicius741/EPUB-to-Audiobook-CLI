@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 import logging
+import os
 from pathlib import Path
+import threading
+import time
 from typing import TYPE_CHECKING, Iterable, Sequence
 
 from .audio_cache import AudioCacheLayout
 from .audio_processing import FfmpegAudioProcessor, LoudnessConfig
 from .config import Config
 from .epub_reader import EbooklibEpubReader
-from .error_log import ErrorCategory, ErrorLogStore, ErrorSeverity
+from .error_log import ErrorCategory, ErrorEntry, ErrorLogStore, ErrorSeverity
 from .interfaces import AudioChunk, Chapter, ChapterAudio, EpubBook, PipelineState
 from .logging_setup import LoggingContext
 from .packaging import FfmpegPackager
@@ -24,6 +28,95 @@ from .utils import ensure_dir, slugify
 
 if TYPE_CHECKING:
     from .cli.progress import ProgressDisplay
+
+
+@dataclass
+class _LocalErrorLog:
+    entries: list[ErrorEntry]
+
+    def __init__(self) -> None:
+        self.entries = []
+
+    def add_error(
+        self,
+        category: ErrorCategory,
+        severity: ErrorSeverity,
+        message: str,
+        *,
+        step: str | None = None,
+        chapter_index: int | None = None,
+        details: dict | None = None,
+        exc: BaseException | None = None,
+    ) -> ErrorEntry:
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        exception_type = type(exc).__name__ if exc is not None else None
+        exception_message = str(exc) if exc is not None else None
+        stack_trace = None
+        if exc is not None and exc.__traceback__ is not None:
+            stack_trace = "".join(
+                __import__("traceback").format_exception(type(exc), exc, exc.__traceback__)
+            ).strip()
+        entry = ErrorEntry(
+            category=category,
+            severity=severity,
+            message=message,
+            timestamp=timestamp,
+            step=step,
+            chapter_index=chapter_index,
+            details=details,
+            exception_type=exception_type,
+            exception_message=exception_message,
+            stack_trace=stack_trace,
+        )
+        self.entries.append(entry)
+        return entry
+
+
+def _process_chapter_in_subprocess(
+    chapter: Chapter,
+    book_slug: str,
+    config: Config,
+    output_format: str,
+) -> tuple[ChapterResult, list[ErrorEntry]]:
+    logger = logging.getLogger(f"epub2audio.book.{book_slug}")
+    pid = os.getpid()
+    logger.info("Process %s starting chapter %d (%s).", pid, chapter.index, chapter.title)
+    cache = AudioCacheLayout(config.paths.cache)
+    cleaner = BasicTextCleaner()
+    segmenter = BasicTextSegmenter(
+        max_chars=config.tts.max_chars,
+        min_chars=config.tts.min_chars,
+        hard_max_chars=config.tts.hard_max_chars,
+    )
+    engine = _build_engine(config)
+    settings = _build_settings(config)
+    audio_processor = FfmpegAudioProcessor(
+        work_dir=ensure_dir(config.paths.cache / "work"),
+        sample_rate=config.tts.sample_rate,
+        channels=config.tts.channels,
+        loudness=LoudnessConfig(
+            target_lufs=config.audio.target_lufs,
+            lra=config.audio.lra,
+            true_peak=config.audio.true_peak,
+        ),
+    )
+    local_error_log = _LocalErrorLog()
+    result = _process_chapter(
+        chapter,
+        book_slug,
+        cache,
+        cleaner,
+        segmenter,
+        engine,
+        settings,
+        audio_processor,
+        config,
+        output_format,
+        logger,
+        local_error_log,
+    )
+    logger.info("Process %s completed chapter %d (%s): %s.", pid, chapter.index, chapter.title, result.status)
+    return result, local_error_log.entries
 
 
 
@@ -315,6 +408,49 @@ def _resolve_output_format(config: Config, logger: logging.Logger) -> str:
     return fmt
 
 
+def _resolve_chapter_workers(config: Config, total_chapters: int, logger: logging.Logger) -> int:
+    if total_chapters <= 1:
+        return 1
+
+    configured = config.tts.chapter_workers
+    if configured is not None:
+        workers = max(1, int(configured))
+        if (
+            config.tts.engine == "mlx"
+            and config.tts.chapter_parallelism == "thread"
+            and workers > 1
+            and not config.tts.unsafe_mlx_parallelism
+        ):
+            logger.warning("MLX engine is not thread-safe; forcing chapter workers to 1.")
+            return 1
+        workers = min(workers, total_chapters)
+        logger.info("Using %d chapter worker(s) (configured).", workers)
+        return workers
+
+    cpu_count = os.cpu_count() or 1
+    if config.tts.engine == "mlx" and config.tts.chapter_parallelism == "thread":
+        if not config.tts.unsafe_mlx_parallelism:
+            logger.info("Using 1 chapter worker (auto; MLX engine).")
+            return 1
+        cap = 2
+        workers = max(1, cpu_count - 1)
+        workers = min(workers, cap, total_chapters)
+        logger.warning("Using %d chapter worker(s) (auto; unsafe MLX parallelism).", workers)
+        return workers
+
+    if config.tts.engine == "mlx" and config.tts.chapter_parallelism == "process":
+        cap = 3
+        workers = max(1, cpu_count - 1)
+        workers = min(workers, cap, total_chapters)
+        logger.warning("Using %d chapter worker(s) (auto; MLX process parallelism).", workers)
+        return workers
+    cap = 4
+    workers = max(1, cpu_count - 1)
+    workers = min(workers, cap, total_chapters)
+    logger.info("Using %d chapter worker(s) (auto; cpu=%s, cap=%d).", workers, cpu_count, cap)
+    return workers
+
+
 def _process_book(
     book: EpubBook,
     book_slug: str,
@@ -333,30 +469,122 @@ def _process_book(
     cache.ensure_chapter_dir(book_slug)
     chapter_results: list[ChapterResult] = []
     total_chapters = len(book.chapters)
-    for chapter in book.chapters:
-        # Emit chapter progress
-        if progress:
-            progress.print_chapter_progress(
-                chapter.index,
-                chapter.title,
-                total_chapters,
+    workers = _resolve_chapter_workers(config, total_chapters, logger)
+    if workers <= 1:
+        for chapter in book.chapters:
+            # Emit chapter progress
+            if progress:
+                progress.print_chapter_progress(
+                    chapter.index,
+                    chapter.title,
+                    total_chapters,
+                )
+            chapter_results.append(
+                _process_chapter(
+                    chapter,
+                    book_slug,
+                    cache,
+                    cleaner,
+                    segmenter,
+                    engine,
+                    settings,
+                    audio_processor,
+                    config,
+                    output_format,
+                    logger,
+                    error_log,
+                )
             )
-        chapter_results.append(
-            _process_chapter(
-                chapter,
-                book_slug,
-                cache,
-                cleaner,
-                segmenter,
-                engine,
-                settings,
-                audio_processor,
-                config,
-                output_format,
-                logger,
-                error_log,
-            )
+        return chapter_results
+
+    use_processes = config.tts.chapter_parallelism == "process"
+    thread_state = threading.local()
+
+    def _worker(chapter: Chapter) -> ChapterResult:
+        worker_engine = getattr(thread_state, "engine", None)
+        if worker_engine is None:
+            worker_engine = _build_engine(config)
+            thread_state.engine = worker_engine
+        return _process_chapter(
+            chapter,
+            book_slug,
+            cache,
+            cleaner,
+            segmenter,
+            worker_engine,
+            settings,
+            audio_processor,
+            config,
+            output_format,
+            logger,
+            error_log,
         )
+
+    heartbeat_seconds = 30.0
+    executor_cls = ProcessPoolExecutor if use_processes else ThreadPoolExecutor
+    with executor_cls(max_workers=workers) as executor:
+        futures: dict[object, Chapter] = {}
+        for chapter in book.chapters:
+            if progress:
+                progress.print_chapter_progress(
+                    chapter.index,
+                    chapter.title,
+                    total_chapters,
+                )
+            if use_processes:
+                future = executor.submit(_process_chapter_in_subprocess, chapter, book_slug, config, output_format)
+            else:
+                future = executor.submit(_worker, chapter)
+            futures[future] = chapter
+
+        pending = set(futures.keys())
+        last_heartbeat = time.monotonic()
+        completed = 0
+        while pending:
+            done, pending = wait(pending, timeout=heartbeat_seconds)
+            if not done:
+                now = time.monotonic()
+                if now - last_heartbeat >= heartbeat_seconds:
+                    if progress:
+                        progress.print(
+                            f"  ...still working ({completed}/{total_chapters} chapters complete)"
+                        )
+                    last_heartbeat = now
+                continue
+
+            for future in done:
+                chapter = futures[future]
+                try:
+                    if use_processes:
+                        result, entries = future.result()
+                        if entries:
+                            error_log.errors.extend(entries)
+                    else:
+                        result = future.result()
+                except Exception as exc:  # pragma: no cover - defensive guard
+                    message = f"Unhandled error in chapter {chapter.index}: {exc}"
+                    logger.error(message)
+                    error_log.add_error(
+                        ErrorCategory.UNKNOWN,
+                        ErrorSeverity.ERROR,
+                        message,
+                        step="chapter_worker",
+                        chapter_index=chapter.index,
+                        details={"chapter_title": chapter.title},
+                        exc=exc,
+                    )
+                    result = ChapterResult(chapter_index=chapter.index, status="failed", output_paths=())
+                chapter_results.append(result)
+                completed += 1
+                if progress:
+                    progress.print_chapter_complete(
+                        chapter.index,
+                        chapter.title,
+                        total_chapters,
+                        result.status,
+                    )
+
+    chapter_results.sort(key=lambda result: result.chapter_index)
     return chapter_results
 
 
