@@ -463,7 +463,7 @@ def _process_book(
     config: Config,
     output_format: str,
     logger: logging.Logger,
-    error_log,
+    error_log: ErrorLogStore,
     progress: "ProgressDisplay | None" = None,
 ) -> list[ChapterResult]:
     cache.ensure_chapter_dir(book_slug)
@@ -501,19 +501,50 @@ def _process_book(
     thread_state = threading.local()
 
     def _worker(chapter: Chapter) -> ChapterResult:
+        # Create thread-local instances to avoid shared mutable state.
+        # Each thread gets its own engine, segmenter, cleaner, and audio processor.
         worker_engine = getattr(thread_state, "engine", None)
         if worker_engine is None:
             worker_engine = _build_engine(config)
             thread_state.engine = worker_engine
+
+        worker_segmenter = getattr(thread_state, "segmenter", None)
+        if worker_segmenter is None:
+            worker_segmenter = BasicTextSegmenter(
+                max_chars=config.tts.max_chars,
+                min_chars=config.tts.min_chars,
+                hard_max_chars=config.tts.hard_max_chars,
+            )
+            thread_state.segmenter = worker_segmenter
+
+        worker_cleaner = getattr(thread_state, "cleaner", None)
+        if worker_cleaner is None:
+            worker_cleaner = BasicTextCleaner()
+            thread_state.cleaner = worker_cleaner
+
+        worker_audio_processor = getattr(thread_state, "audio_processor", None)
+        if worker_audio_processor is None:
+            worker_audio_processor = FfmpegAudioProcessor(
+                work_dir=ensure_dir(config.paths.cache / "work"),
+                sample_rate=config.tts.sample_rate,
+                channels=config.tts.channels,
+                loudness=LoudnessConfig(
+                    target_lufs=config.audio.target_lufs,
+                    lra=config.audio.lra,
+                    true_peak=config.audio.true_peak,
+                ),
+            )
+            thread_state.audio_processor = worker_audio_processor
+
         return _process_chapter(
             chapter,
             book_slug,
             cache,
-            cleaner,
-            segmenter,
+            worker_cleaner,
+            worker_segmenter,
             worker_engine,
             settings,
-            audio_processor,
+            worker_audio_processor,
             config,
             output_format,
             logger,
@@ -522,67 +553,76 @@ def _process_book(
 
     heartbeat_seconds = 30.0
     executor_cls = ProcessPoolExecutor if use_processes else ThreadPoolExecutor
-    with executor_cls(max_workers=workers) as executor:
-        futures: dict[object, Chapter] = {}
-        for chapter in book.chapters:
-            if progress:
-                progress.print_chapter_progress(
-                    chapter.index,
-                    chapter.title,
-                    total_chapters,
-                )
-            if use_processes:
-                future = executor.submit(_process_chapter_in_subprocess, chapter, book_slug, config, output_format)
-            else:
-                future = executor.submit(_worker, chapter)
-            futures[future] = chapter
 
-        pending = set(futures.keys())
-        last_heartbeat = time.monotonic()
-        completed = 0
-        while pending:
-            done, pending = wait(pending, timeout=heartbeat_seconds)
-            if not done:
-                now = time.monotonic()
-                if now - last_heartbeat >= heartbeat_seconds:
-                    if progress:
-                        progress.print(
-                            f"  ...still working ({completed}/{total_chapters} chapters complete)"
-                        )
-                    last_heartbeat = now
-                continue
-
-            for future in done:
-                chapter = futures[future]
-                try:
-                    if use_processes:
-                        result, entries = future.result()
-                        if entries:
-                            error_log.errors.extend(entries)
-                    else:
-                        result = future.result()
-                except Exception as exc:  # pragma: no cover - defensive guard
-                    message = f"Unhandled error in chapter {chapter.index}: {exc}"
-                    logger.error(message)
-                    error_log.add_error(
-                        ErrorCategory.UNKNOWN,
-                        ErrorSeverity.ERROR,
-                        message,
-                        step="chapter_worker",
-                        chapter_index=chapter.index,
-                        details={"chapter_title": chapter.title},
-                        exc=exc,
-                    )
-                    result = ChapterResult(chapter_index=chapter.index, status="failed", output_paths=())
-                chapter_results.append(result)
-                completed += 1
+    try:
+        with executor_cls(max_workers=workers) as executor:
+            futures: dict[object, Chapter] = {}
+            for chapter in book.chapters:
                 if progress:
-                    progress.print_chapter_complete(
+                    progress.print_chapter_progress(
                         chapter.index,
                         chapter.title,
                         total_chapters,
-                        result.status,
                     )
+                if use_processes:
+                    future = executor.submit(_process_chapter_in_subprocess, chapter, book_slug, config, output_format)
+                else:
+                    future = executor.submit(_worker, chapter)
+                futures[future] = chapter
+
+            pending = set(futures.keys())
+            last_heartbeat = time.monotonic()
+            completed = 0
+            while pending:
+                done, pending = wait(pending, timeout=heartbeat_seconds)
+                if not done:
+                    now = time.monotonic()
+                    if now - last_heartbeat >= heartbeat_seconds:
+                        if progress:
+                            progress.print(
+                                f"  ...still working ({completed}/{total_chapters} chapters complete)"
+                            )
+                        last_heartbeat = now
+                    continue
+
+                for future in done:
+                    chapter = futures[future]
+                    try:
+                        if use_processes:
+                            result, entries = future.result()
+                            if entries:
+                                error_log.errors.extend(entries)
+                        else:
+                            result = future.result()
+                    except Exception as exc:  # pragma: no cover - defensive guard
+                        message = f"Unhandled error in chapter {chapter.index}: {exc}"
+                        logger.error(message)
+                        error_log.add_error(
+                            ErrorCategory.UNKNOWN,
+                            ErrorSeverity.ERROR,
+                            message,
+                            step="chapter_worker",
+                            chapter_index=chapter.index,
+                            details={"chapter_title": chapter.title},
+                            exc=exc,
+                        )
+                        result = ChapterResult(chapter_index=chapter.index, status="failed", output_paths=())
+                    chapter_results.append(result)
+                    completed += 1
+                    if progress:
+                        progress.print_chapter_complete(
+                            chapter.index,
+                            chapter.title,
+                            total_chapters,
+                            result.status,
+                        )
+    except KeyboardInterrupt:
+        # Gracefully handle Ctrl+C: cancel pending futures and exit
+        logger.warning("Processing interrupted by user. Cancelling pending work...")
+        for future in futures:
+            future.cancel()
+        # Re-raise to allow upper layers to handle the interruption
+        raise
 
     chapter_results.sort(key=lambda result: result.chapter_index)
     return chapter_results
@@ -657,7 +697,7 @@ def _process_chapter(
     config: Config,
     output_format: str,
     logger: logging.Logger,
-    error_log,
+    error_log: ErrorLogStore,
 ) -> ChapterResult:
     stitched_path = cache.chapter_path(book_slug, chapter.index, "stitched")
     normalized_path = stitched_path.with_name(f"{stitched_path.stem}.normalized.wav")
