@@ -27,6 +27,9 @@ def test_synthesize_text_splits_long_text(tmp_path: Path) -> None:
         channels=1,
         speed=1.0,
         lang_code=None,
+        ref_audio=None,
+        ref_text=None,
+        ref_audio_id=None,
     )
 
     text = "Sentence one. Sentence two. Sentence three. Sentence four."
@@ -58,6 +61,9 @@ def test_transient_retry(tmp_path: Path) -> None:
         channels=1,
         speed=1.0,
         lang_code=None,
+        ref_audio=None,
+        ref_text=None,
+        ref_audio_id=None,
     )
 
     chunks = synthesize_text("Hello world.", DummyEngine(), settings, sleep_fn=lambda _: None)
@@ -85,6 +91,9 @@ def test_invalid_input_skips(tmp_path: Path) -> None:
         channels=1,
         speed=1.0,
         lang_code=None,
+        ref_audio=None,
+        ref_text=None,
+        ref_audio_id=None,
     )
 
     chunks = synthesize_text("!!!", DummyEngine(), settings, sleep_fn=lambda _: None)

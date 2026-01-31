@@ -30,6 +30,9 @@ class TtsSynthesisSettings:
     channels: int
     speed: float
     lang_code: str | None
+    ref_audio: Path | None
+    ref_text: str | None
+    ref_audio_id: str | None
 
 
 def synthesize_text(
@@ -118,6 +121,9 @@ def _synthesize_with_retry(
                 "lang_code": resolved_lang,
                 "sample_rate": settings.sample_rate,
                 "channels": settings.channels,
+                "ref_audio": settings.ref_audio,
+                "ref_text": settings.ref_text,
+                "ref_audio_id": settings.ref_audio_id,
             }
             output_path = _resolve_output_path(
                 text,
@@ -256,6 +262,8 @@ def _resolve_output_path(
         model_id=settings.model_id,
         voice=resolved_voice,
         lang_code=resolved_lang,
+        ref_audio_id=settings.ref_audio_id,
+        ref_text=settings.ref_text,
         speed=settings.speed,
         sample_rate=settings.sample_rate,
         channels=settings.channels,

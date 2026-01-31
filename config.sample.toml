@@ -21,6 +21,8 @@ model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
 # Optional voice + language (engine-specific)
 # voice = "default"
 # lang_code = "en"
+# ref_audio = "path/to/narrator.wav"
+# ref_text = "Transcript of the reference audio"
 
 # Playback characteristics
 speed = 1.0

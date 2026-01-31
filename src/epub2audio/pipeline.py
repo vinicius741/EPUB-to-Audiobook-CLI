@@ -372,6 +372,7 @@ def _build_engine(config: Config) -> MlxTtsEngine:
     if config.tts.engine != "mlx":
         raise TtsModelError(f"Unsupported TTS engine '{config.tts.engine}'.")
     output_dir = ensure_dir(config.paths.cache / "tts")
+    ref_audio_id = _ref_audio_cache_id(config.tts.ref_audio)
     return MlxTtsEngine(
         model_id=config.tts.model_id,
         output_dir=output_dir,
@@ -379,12 +380,16 @@ def _build_engine(config: Config) -> MlxTtsEngine:
         channels=config.tts.channels,
         voice=config.tts.voice,
         lang_code=config.tts.lang_code,
+        ref_audio=config.tts.ref_audio,
+        ref_text=config.tts.ref_text,
+        ref_audio_id=ref_audio_id,
         speed=config.tts.speed,
         max_input_chars=config.tts.max_chars,
     )
 
 
 def _build_settings(config: Config) -> TtsSynthesisSettings:
+    ref_audio_id = _ref_audio_cache_id(config.tts.ref_audio)
     return TtsSynthesisSettings(
         model_id=config.tts.model_id,
         max_chars=config.tts.max_chars,
@@ -397,7 +402,20 @@ def _build_settings(config: Config) -> TtsSynthesisSettings:
         channels=config.tts.channels,
         speed=config.tts.speed,
         lang_code=config.tts.lang_code,
+        ref_audio=config.tts.ref_audio,
+        ref_text=config.tts.ref_text,
+        ref_audio_id=ref_audio_id,
     )
+
+
+def _ref_audio_cache_id(ref_audio: Path | None) -> str | None:
+    if ref_audio is None:
+        return None
+    try:
+        stat = ref_audio.stat()
+        return f"{ref_audio}:{stat.st_mtime_ns}:{stat.st_size}"
+    except OSError:
+        return str(ref_audio)
 
 
 def _resolve_output_format(config: Config, logger: logging.Logger) -> str:

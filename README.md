@@ -153,6 +153,8 @@ engine = "mlx"                                    # TTS engine (only mlx support
 model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"  # HuggingFace model ID
 voice = null                                      # Voice preset (model-dependent)
 lang_code = null                                  # Language code (null = auto-detect)
+ref_audio = null                                  # Reference audio path for voice cloning
+ref_text = null                                   # Transcript for reference audio
 speed = 1.0                                       # Playback speed multiplier
 sample_rate = 24000                               # Audio sample rate in Hz
 channels = 1                                      # Number of audio channels (1 = mono)
@@ -198,6 +200,8 @@ true_peak = -1.0          # True peak limit in dBTP
 | `model_id` | string | `"mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"` | HuggingFace model identifier |
 | `voice` | string or `null` | `null` | Voice preset (model-dependent) |
 | `lang_code` | string or `null` | `null` | Language code (`null` = auto-detect) |
+| `ref_audio` | string or `null` | `null` | Reference audio path for voice cloning (Base models) |
+| `ref_text` | string or `null` | `null` | Transcript for the reference audio |
 | `speed` | float | `1.0` | Playback speed multiplier (0.5 = 2x slower, 2.0 = 2x faster) |
 | `sample_rate` | int | `24000` | Audio sample rate in Hz |
 | `channels` | int | `1` | Number of audio channels (1 = mono, 2 = stereo) |

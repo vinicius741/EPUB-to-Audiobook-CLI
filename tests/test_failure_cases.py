@@ -324,6 +324,9 @@ class TestTtsPipelineFailures:
             channels=1,
             speed=1.0,
             lang_code=None,
+            ref_audio=None,
+            ref_text=None,
+            ref_audio_id=None,
         )
 
         chunks = synthesize_text("!!!", FailingEngine(), settings, sleep_fn=lambda _: None)
@@ -363,6 +366,9 @@ class TestTtsPipelineFailures:
             channels=1,
             speed=1.0,
             lang_code=None,
+            ref_audio=None,
+            ref_text=None,
+            ref_audio_id=None,
         )
 
         # Text that will be split
@@ -397,6 +403,9 @@ class TestTtsPipelineFailures:
             channels=1,
             speed=1.0,
             lang_code=None,
+            ref_audio=None,
+            ref_text=None,
+            ref_audio_id=None,
         )
 
         chunks = synthesize_text("Hello world", TransientFailureEngine(), settings, sleep_fn=lambda _: None)
@@ -419,6 +428,9 @@ class TestTtsPipelineFailures:
             channels=1,
             speed=1.0,
             lang_code=None,
+            ref_audio=None,
+            ref_text=None,
+            ref_audio_id=None,
         )
 
         class AlwaysFailingEngine:
@@ -443,6 +455,9 @@ class TestTtsPipelineFailures:
             channels=1,
             speed=1.0,
             lang_code=None,
+            ref_audio=None,
+            ref_text=None,
+            ref_audio_id=None,
         )
 
         class UnexpectedErrorEngine:

@@ -82,11 +82,16 @@ class MlxTtsEngine(TtsEngine):
     channels: int = 1
     voice: str | None = None
     lang_code: str | None = None
+    ref_audio: Path | None = None
+    ref_text: str | None = None
+    ref_audio_id: str | None = None
     speed: float = 1.0
     max_input_chars: int | None = None
 
     _model: object | None = field(default=None, init=False, repr=False)
     _tts: object | None = field(default=None, init=False, repr=False)
+    _ref_audio_cache: object | None = field(default=None, init=False, repr=False)
+    _warned_missing_ref_text: bool = field(default=False, init=False, repr=False)
 
     def ensure_loaded(self) -> None:
         if self._model is not None or self._tts is not None:
@@ -138,6 +143,9 @@ class MlxTtsEngine(TtsEngine):
         cfg = config or {}
         resolved_voice = _coerce_optional_str(cfg.get("voice")) or voice or self.voice
         resolved_lang = _coerce_optional_str(cfg.get("lang_code")) or self.lang_code
+        resolved_ref_audio = _coerce_optional_path(cfg.get("ref_audio")) or self.ref_audio
+        resolved_ref_text = _coerce_optional_str(cfg.get("ref_text")) or self.ref_text
+        resolved_ref_audio_id = _coerce_optional_str(cfg.get("ref_audio_id")) or self.ref_audio_id
         resolved_speed = _coerce_float(cfg.get("speed"), self.speed)
         sample_rate = _coerce_int(cfg.get("sample_rate"), self.sample_rate)
         channels = _coerce_int(cfg.get("channels"), self.channels)
@@ -150,6 +158,8 @@ class MlxTtsEngine(TtsEngine):
                 model_id=self.model_id,
                 voice=resolved_voice,
                 lang_code=resolved_lang,
+                ref_audio_id=resolved_ref_audio_id,
+                ref_text=resolved_ref_text,
                 speed=resolved_speed,
                 sample_rate=sample_rate,
                 channels=channels,
@@ -165,12 +175,22 @@ class MlxTtsEngine(TtsEngine):
         self.ensure_loaded()
 
         try:
+            ref_audio_data = None
+            if resolved_ref_audio is not None:
+                ref_audio_data = self._load_ref_audio(resolved_ref_audio)
+                if resolved_ref_text is None and not self._warned_missing_ref_text:
+                    _LOGGER.warning(
+                        "ref_audio is set but ref_text is missing; voice consistency may degrade."
+                    )
+                    self._warned_missing_ref_text = True
             if self._model is not None:
                 audio, detected_channels = _generate_with_model(
                     self._model,
                     text,
                     voice=resolved_voice,
                     lang_code=resolved_lang,
+                    ref_audio=ref_audio_data,
+                    ref_text=resolved_ref_text,
                     speed=resolved_speed,
                 )
             elif self._tts is not None:
@@ -179,6 +199,8 @@ class MlxTtsEngine(TtsEngine):
                     text,
                     voice=resolved_voice,
                     lang_code=resolved_lang,
+                    ref_audio=ref_audio_data,
+                    ref_text=resolved_ref_text,
                     speed=resolved_speed,
                 )
             else:  # pragma: no cover - defensive
@@ -202,6 +224,24 @@ class MlxTtsEngine(TtsEngine):
         _write_wav(output_path, audio, sample_rate=sample_rate, channels=channels)
         duration_ms = _wav_duration_ms(output_path)
         return AudioChunk(index=0, path=output_path, duration_ms=duration_ms)
+
+    def _load_ref_audio(self, ref_audio: Path) -> object:
+        if self._ref_audio_cache is not None:
+            return self._ref_audio_cache
+        if not ref_audio.exists():
+            raise TtsModelError(f"Reference audio not found: {ref_audio}")
+        try:
+            from mlx_audio.utils import load_audio  # type: ignore
+        except ImportError as exc:  # pragma: no cover - runtime dependency
+            raise TtsModelError("mlx-audio is not installed. Install with `pip install mlx mlx-audio`.") from exc
+        sample_rate = self.sample_rate
+        if self._model is not None and hasattr(self._model, "sample_rate"):
+            sample_rate = int(getattr(self._model, "sample_rate"))
+        normalize = False
+        if self._model is not None and getattr(self._model, "model_type", None) == "spark":
+            normalize = True
+        self._ref_audio_cache = load_audio(str(ref_audio), sample_rate=sample_rate, volume_normalize=normalize)
+        return self._ref_audio_cache
 
 def _generate_with_model(model: object, text: str, **kwargs: object) -> tuple[list[float], int]:
     try:
@@ -347,6 +387,8 @@ def _chunk_id(
     model_id: str,
     voice: str | None,
     lang_code: str | None,
+    ref_audio_id: str | None,
+    ref_text: str | None,
     speed: float,
     sample_rate: int,
     channels: int,
@@ -356,6 +398,8 @@ def _chunk_id(
         model_id=model_id,
         voice=voice,
         lang_code=lang_code,
+        ref_audio_id=ref_audio_id,
+        ref_text=ref_text,
         speed=speed,
         sample_rate=sample_rate,
         channels=channels,
@@ -380,6 +424,22 @@ def _coerce_optional_str(value: object) -> str | None:
             return None
         return cleaned
     return str(value)
+
+
+def _coerce_optional_path(value: object) -> Path | None:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned or cleaned.lower() in {"none", "null"}:
+            return None
+        return Path(cleaned)
+    try:
+        return Path(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _coerce_float(value: object, default: float) -> float:

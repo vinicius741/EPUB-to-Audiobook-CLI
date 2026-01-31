@@ -34,6 +34,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "model_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit",
         "voice": None,
         "lang_code": None,
+        "ref_audio": None,
+        "ref_text": None,
         "speed": 1.0,
         "sample_rate": 24000,
         "channels": 1,
@@ -79,6 +81,8 @@ class TtsConfig:
     model_id: str
     voice: str | None
     lang_code: str | None
+    ref_audio: Path | None
+    ref_text: str | None
     speed: float
     sample_rate: int
     channels: int
@@ -148,6 +152,8 @@ def load_config(config_path: Path | None = None, *, cwd: Path | None = None) -> 
         model_id=str(tts_raw.get("model_id", DEFAULT_CONFIG["tts"]["model_id"])),
         voice=_optional_str(tts_raw.get("voice")),
         lang_code=_optional_str(tts_raw.get("lang_code")),
+        ref_audio=_optional_path(base_dir, tts_raw.get("ref_audio")),
+        ref_text=_optional_str(tts_raw.get("ref_text")),
         speed=float(tts_raw.get("speed", 1.0)),
         sample_rate=int(tts_raw.get("sample_rate", 24000)),
         channels=int(tts_raw.get("channels", 1)),
@@ -190,6 +196,8 @@ def config_summary(config: Config) -> str:
         f"  model: {config.tts.model_id}\n"
         f"  voice: {config.tts.voice or 'default'}\n"
         f"  lang_code: {config.tts.lang_code or 'default'}\n"
+        f"  ref_audio: {config.tts.ref_audio or 'none'}\n"
+        f"  ref_text: {config.tts.ref_text or 'none'}\n"
         f"  speed: {config.tts.speed}\n"
         f"  sample_rate: {config.tts.sample_rate}\n"
         f"  channels: {config.tts.channels}\n"
@@ -245,6 +253,20 @@ def _optional_str(value: Any) -> str | None:
             return None
         return cleaned
     return str(value)
+
+
+def _optional_path(base_dir: Path, value: Any) -> Path | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned or cleaned.lower() in {"none", "null"}:
+            return None
+        value = cleaned
+    try:
+        return _resolve_path(base_dir, value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _optional_int(value: Any) -> int | None:
@@ -313,6 +335,8 @@ engine = "mlx"
 model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
 voice = null
 lang_code = null
+ref_audio = null
+ref_text = null
 speed = 1.0
 sample_rate = 24000
 channels = 1
