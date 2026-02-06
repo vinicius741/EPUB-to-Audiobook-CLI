@@ -30,22 +30,26 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "console_level": "INFO",
     },
     "tts": {
-        "engine": "mlx",
-        "model_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit",
-        "voice": None,
+        "engine": "kokoro_onnx",
+        "model_id": "onnx-community/Kokoro-82M-v1.0-ONNX",
+        "voice": "af_heart",
         "lang_code": None,
         "ref_audio": None,
         "ref_text": None,
         "speed": 1.0,
         "sample_rate": 24000,
         "channels": 1,
-        "max_chars": 1000,
+        "max_chars": 450,
         "min_chars": 200,
-        "hard_max_chars": 1250,
+        "hard_max_chars": 700,
         "max_retries": 2,
         "backoff_base": 0.5,
         "backoff_jitter": 0.1,
         "output_format": "wav",
+        "execution_provider": "auto",
+        "onnx_model_file": "model_q8f16.onnx",
+        "onnx_voices_file": "voices-v1.0.bin",
+        "max_input_tokens": 510,
         "chapter_workers": "auto",
         "chapter_parallelism": "thread",
         "unsafe_mlx_parallelism": False,
@@ -93,6 +97,10 @@ class TtsConfig:
     backoff_base: float
     backoff_jitter: float
     output_format: str
+    execution_provider: str
+    onnx_model_file: str
+    onnx_voices_file: str
+    max_input_tokens: int
     chapter_workers: int | None
     chapter_parallelism: str
     unsafe_mlx_parallelism: bool
@@ -148,22 +156,26 @@ def load_config(config_path: Path | None = None, *, cwd: Path | None = None) -> 
     )
     tts_raw = merged.get("tts", {})
     tts = TtsConfig(
-        engine=str(tts_raw.get("engine", "mlx")),
+        engine=str(tts_raw.get("engine", DEFAULT_CONFIG["tts"]["engine"])),
         model_id=str(tts_raw.get("model_id", DEFAULT_CONFIG["tts"]["model_id"])),
-        voice=_optional_str(tts_raw.get("voice")),
+        voice=_optional_str(tts_raw.get("voice", DEFAULT_CONFIG["tts"]["voice"])),
         lang_code=_optional_str(tts_raw.get("lang_code")),
         ref_audio=_optional_path(base_dir, tts_raw.get("ref_audio")),
         ref_text=_optional_str(tts_raw.get("ref_text")),
-        speed=float(tts_raw.get("speed", 1.0)),
-        sample_rate=int(tts_raw.get("sample_rate", 24000)),
-        channels=int(tts_raw.get("channels", 1)),
-        max_chars=int(tts_raw.get("max_chars", 1000)),
-        min_chars=int(tts_raw.get("min_chars", 200)),
+        speed=float(tts_raw.get("speed", DEFAULT_CONFIG["tts"]["speed"])),
+        sample_rate=int(tts_raw.get("sample_rate", DEFAULT_CONFIG["tts"]["sample_rate"])),
+        channels=int(tts_raw.get("channels", DEFAULT_CONFIG["tts"]["channels"])),
+        max_chars=int(tts_raw.get("max_chars", DEFAULT_CONFIG["tts"]["max_chars"])),
+        min_chars=int(tts_raw.get("min_chars", DEFAULT_CONFIG["tts"]["min_chars"])),
         hard_max_chars=_optional_int(tts_raw.get("hard_max_chars")),
-        max_retries=int(tts_raw.get("max_retries", 2)),
-        backoff_base=float(tts_raw.get("backoff_base", 0.5)),
-        backoff_jitter=float(tts_raw.get("backoff_jitter", 0.1)),
-        output_format=str(tts_raw.get("output_format", "wav")).lower(),
+        max_retries=int(tts_raw.get("max_retries", DEFAULT_CONFIG["tts"]["max_retries"])),
+        backoff_base=float(tts_raw.get("backoff_base", DEFAULT_CONFIG["tts"]["backoff_base"])),
+        backoff_jitter=float(tts_raw.get("backoff_jitter", DEFAULT_CONFIG["tts"]["backoff_jitter"])),
+        output_format=str(tts_raw.get("output_format", DEFAULT_CONFIG["tts"]["output_format"])).lower(),
+        execution_provider=_optional_execution_provider(tts_raw.get("execution_provider", "auto")),
+        onnx_model_file=str(tts_raw.get("onnx_model_file", DEFAULT_CONFIG["tts"]["onnx_model_file"])),
+        onnx_voices_file=str(tts_raw.get("onnx_voices_file", DEFAULT_CONFIG["tts"]["onnx_voices_file"])),
+        max_input_tokens=int(tts_raw.get("max_input_tokens", DEFAULT_CONFIG["tts"]["max_input_tokens"])),
         chapter_workers=_optional_workers(tts_raw.get("chapter_workers")),
         chapter_parallelism=_optional_parallelism(tts_raw.get("chapter_parallelism")),
         unsafe_mlx_parallelism=bool(tts_raw.get("unsafe_mlx_parallelism", False)),
@@ -206,6 +218,10 @@ def config_summary(config: Config) -> str:
         f"  hard_max_chars: {config.tts.hard_max_chars or 'auto'}\n"
         f"  max_retries: {config.tts.max_retries}\n"
         f"  output_format: {config.tts.output_format}\n"
+        f"  execution_provider: {config.tts.execution_provider}\n"
+        f"  onnx_model_file: {config.tts.onnx_model_file}\n"
+        f"  onnx_voices_file: {config.tts.onnx_voices_file}\n"
+        f"  max_input_tokens: {config.tts.max_input_tokens}\n"
         f"  chapter_workers: {config.tts.chapter_workers or 'auto'}\n"
         f"  chapter_parallelism: {config.tts.chapter_parallelism}\n"
         f"  unsafe_mlx_parallelism: {config.tts.unsafe_mlx_parallelism}\n"
@@ -310,6 +326,17 @@ def _optional_parallelism(value: Any) -> str:
     return str(value).strip().lower() or "thread"
 
 
+def _optional_execution_provider(value: Any) -> str:
+    if value is None:
+        return "auto"
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return "auto"
+        return cleaned
+    return str(value)
+
+
 def write_default_config(path: Path) -> None:
     """Write the default config.toml file.
 
@@ -331,22 +358,26 @@ level = "INFO"
 console_level = "INFO"
 
 [tts]
-engine = "mlx"
-model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
-voice = null
+engine = "kokoro_onnx"
+model_id = "onnx-community/Kokoro-82M-v1.0-ONNX"
+voice = "af_heart"
 lang_code = null
 ref_audio = null
 ref_text = null
 speed = 1.0
 sample_rate = 24000
 channels = 1
-max_chars = 1000
+max_chars = 450
 min_chars = 200
-hard_max_chars = 1250
+hard_max_chars = 700
 max_retries = 2
 backoff_base = 0.5
 backoff_jitter = 0.1
 output_format = "wav"
+execution_provider = "auto"
+onnx_model_file = "model_q8f16.onnx"
+onnx_voices_file = "voices-v1.0.bin"
+max_input_tokens = 510
 chapter_workers = "auto"
 chapter_parallelism = "thread"
 unsafe_mlx_parallelism = false

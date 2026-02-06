@@ -16,12 +16,13 @@ from .audio_processing import FfmpegAudioProcessor, LoudnessConfig
 from .config import Config
 from .epub_reader import EbooklibEpubReader
 from .error_log import ErrorCategory, ErrorEntry, ErrorLogStore, ErrorSeverity
-from .interfaces import AudioChunk, Chapter, ChapterAudio, EpubBook, PipelineState
+from .interfaces import AudioChunk, Chapter, ChapterAudio, EpubBook, PipelineState, TtsEngine
 from .logging_setup import LoggingContext
 from .packaging import FfmpegPackager
 from .text_cleaner import BasicTextCleaner
 from .text_segmenter import BasicTextSegmenter
-from .tts_engine import MlxTtsEngine, TtsError, TtsModelError
+from .tts_engine import TtsError
+from .tts_factory import build_tts_engine
 from .tts_pipeline import TtsSynthesisSettings, synthesize_text
 from .state_store import JsonStateStore
 from .utils import ensure_dir, slugify
@@ -368,30 +369,14 @@ def _expand_inputs(inputs: Sequence[Path]) -> list[Path]:
     return expanded
 
 
-def _build_engine(config: Config) -> MlxTtsEngine:
-    if config.tts.engine != "mlx":
-        raise TtsModelError(f"Unsupported TTS engine '{config.tts.engine}'.")
-    output_dir = ensure_dir(config.paths.cache / "tts")
-    ref_audio_id = _ref_audio_cache_id(config.tts.ref_audio)
-    return MlxTtsEngine(
-        model_id=config.tts.model_id,
-        output_dir=output_dir,
-        sample_rate=config.tts.sample_rate,
-        channels=config.tts.channels,
-        voice=config.tts.voice,
-        lang_code=config.tts.lang_code,
-        ref_audio=config.tts.ref_audio,
-        ref_text=config.tts.ref_text,
-        ref_audio_id=ref_audio_id,
-        speed=config.tts.speed,
-        max_input_chars=config.tts.max_chars,
-    )
+def _build_engine(config: Config) -> TtsEngine:
+    return build_tts_engine(config, ensure_dir(config.paths.cache / "tts"))
 
 
 def _build_settings(config: Config) -> TtsSynthesisSettings:
     ref_audio_id = _ref_audio_cache_id(config.tts.ref_audio)
     return TtsSynthesisSettings(
-        model_id=config.tts.model_id,
+        model_id=f"{config.tts.engine}:{config.tts.model_id}",
         max_chars=config.tts.max_chars,
         min_chars=config.tts.min_chars,
         hard_max_chars=config.tts.hard_max_chars,
@@ -475,7 +460,7 @@ def _process_book(
     cache: AudioCacheLayout,
     cleaner: BasicTextCleaner,
     segmenter: BasicTextSegmenter,
-    engine: MlxTtsEngine,
+    engine: TtsEngine,
     settings: TtsSynthesisSettings,
     audio_processor: FfmpegAudioProcessor,
     config: Config,
@@ -709,7 +694,7 @@ def _process_chapter(
     cache: AudioCacheLayout,
     cleaner: BasicTextCleaner,
     segmenter: BasicTextSegmenter,
-    engine: MlxTtsEngine,
+    engine: TtsEngine,
     settings: TtsSynthesisSettings,
     audio_processor: FfmpegAudioProcessor,
     config: Config,

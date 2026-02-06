@@ -1,14 +1,15 @@
 # epub2audio
 
-**epub2audio** is a command-line tool that converts EPUB ebooks into high-quality audiobooks (`.m4b`) using local, offline Text-to-Speech (TTS) models. It is optimized for Apple Silicon using the [MLX](https://github.com/ml-explore/mlx) framework.
+**epub2audio** is a command-line tool that converts EPUB ebooks into high-quality audiobooks (`.m4b`) using local, offline Text-to-Speech (TTS) models. It supports both macOS (Apple Silicon) and Linux.
 
 ## Features
 
 - **Local & Private:** Runs entirely on your machine. No cloud APIs, no data leaks.
-- **Apple Silicon Optimized:** Leverages MLX for efficient, high-performance inference on Mac.
+- **Cross-Platform Default:** Uses Kokoro ONNX by default on both macOS and Linux.
+- **Optional MLX Backend:** MLX remains available for Apple Silicon users who prefer it.
 - **Smart Text Processing:** Parses EPUB structure, cleans text, and segments it intelligently for natural-sounding speech.
 - **High-Quality Audio:**
-  - Uses state-of-the-art open models (default: `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit`).
+  - Uses modern open models (default: `onnx-community/Kokoro-82M-v1.0-ONNX`).
   - Automatically inserts silence between sentences and paragraphs.
   - Performs EBU R128 loudness normalization for professional audio levels.
 - **Audiobook Packaging:** Outputs chapterized `.m4b` files complete with metadata (title, author) and cover art.
@@ -17,11 +18,14 @@
 
 ## Prerequisites
 
-- **OS:** macOS (Apple Silicon recommended for performance).
+- **OS:** macOS (Apple Silicon) or Linux x86_64.
 - **Python:** 3.10 or higher.
 - **FFmpeg:** Required for audio processing and packaging.
   ```bash
+  # macOS
   brew install ffmpeg
+  # Linux (Debian/Ubuntu example)
+  sudo apt install ffmpeg
   ```
 
 ## Installation
@@ -36,8 +40,11 @@ cd EPUB-to-Audiobook-CLI
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
-pip3 install -e .
+# Install cross-platform TTS backend (recommended on macOS and Linux)
+pip3 install -e ".[tts-kokoro]"
+
+# Optional: add MLX backend for Apple Silicon compatibility
+pip3 install -e ".[tts-kokoro,tts-mlx]"
 ```
 
 ## Quick Start
@@ -149,22 +156,26 @@ level = "INFO"            # File log level
 console_level = "INFO"    # Console log level
 
 [tts]
-engine = "mlx"                                    # TTS engine (only mlx supported)
-model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"  # HuggingFace model ID
-voice = null                                      # Voice preset (model-dependent)
+engine = "kokoro_onnx"                            # TTS engine: kokoro_onnx or mlx
+model_id = "onnx-community/Kokoro-82M-v1.0-ONNX" # HuggingFace model ID
+voice = "af_heart"                                # Voice preset (engine/model-dependent)
 lang_code = null                                  # Language code (null = auto-detect)
 ref_audio = null                                  # Reference audio path for voice cloning
 ref_text = null                                   # Transcript for reference audio
 speed = 1.0                                       # Playback speed multiplier
 sample_rate = 24000                               # Audio sample rate in Hz
 channels = 1                                      # Number of audio channels (1 = mono)
-max_chars = 1000                                  # Target max characters per TTS request
+max_chars = 450                                   # Target max characters per TTS request
 min_chars = 200                                   # Min characters to consider for splitting
-hard_max_chars = 1250                             # Absolute limit for TTS input
+hard_max_chars = 700                              # Absolute limit for TTS input
 max_retries = 2                                   # Retry count for transient failures
 backoff_base = 0.5                                # Base backoff delay in seconds
 backoff_jitter = 0.1                              # Random jitter for backoff
 output_format = "wav"                             # TTS output format
+execution_provider = "auto"                       # ONNX provider selection
+onnx_model_file = "model_q8f16.onnx"              # ONNX model filename
+onnx_voices_file = "voices-v1.0.bin"              # Voices filename
+max_input_tokens = 510                            # Token safety limit for ONNX backend
 
 [audio]
 silence_ms = 250          # Silence duration to insert between segments (milliseconds)
@@ -196,22 +207,26 @@ true_peak = -1.0          # True peak limit in dBTP
 #### `[tts]` Section
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `engine` | string | `"mlx"` | TTS engine (only `mlx` supported) |
-| `model_id` | string | `"mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"` | HuggingFace model identifier |
-| `voice` | string or `null` | `null` | Voice preset (model-dependent) |
+| `engine` | string | `"kokoro_onnx"` | TTS engine (`kokoro_onnx` default, `mlx` optional) |
+| `model_id` | string | `"onnx-community/Kokoro-82M-v1.0-ONNX"` | HuggingFace model identifier |
+| `voice` | string or `null` | `"af_heart"` | Voice preset (model-dependent) |
 | `lang_code` | string or `null` | `null` | Language code (`null` = auto-detect) |
 | `ref_audio` | string or `null` | `null` | Reference audio path for voice cloning (Base models) |
 | `ref_text` | string or `null` | `null` | Transcript for the reference audio |
 | `speed` | float | `1.0` | Playback speed multiplier (0.5 = 2x slower, 2.0 = 2x faster) |
 | `sample_rate` | int | `24000` | Audio sample rate in Hz |
 | `channels` | int | `1` | Number of audio channels (1 = mono, 2 = stereo) |
-| `max_chars` | int | `1000` | Target maximum characters per TTS request |
+| `max_chars` | int | `450` | Target maximum characters per TTS request |
 | `min_chars` | int | `200` | Minimum characters to consider when splitting text |
-| `hard_max_chars` | int | `1250` | Absolute limit for TTS input size |
+| `hard_max_chars` | int | `700` | Absolute limit for TTS input size |
 | `max_retries` | int | `2` | Number of retries for transient failures |
 | `backoff_base` | float | `0.5` | Base backoff delay in seconds (exponential) |
 | `backoff_jitter` | float | `0.1` | Random jitter added to backoff delays |
 | `output_format` | string | `"wav"` | TTS output format |
+| `execution_provider` | string | `"auto"` | ONNX provider list or `auto` |
+| `onnx_model_file` | string | `"model_q8f16.onnx"` | ONNX model filename in HuggingFace repo |
+| `onnx_voices_file` | string | `"voices-v1.0.bin"` | Kokoro voices filename in HuggingFace repo |
+| `max_input_tokens` | int | `510` | Input token safety cap for ONNX backend |
 
 #### `[audio]` Section
 | Setting | Type | Default | Description |
@@ -327,6 +342,18 @@ pytest
 
 # Run specific test file
 pytest tests/test_tts_pipeline.py
+```
+
+### Local Cross-Platform Smoke Commands
+
+Run on each target machine after install:
+
+```bash
+# 1) Environment + backend checks
+epub2audio doctor --verify
+
+# 2) Quick synthesis check
+epub2audio doctor --smoke-test --text "Cross-platform test sentence."
 ```
 
 See `documentation/development_plan.md` for the architectural roadmap and implementation details.

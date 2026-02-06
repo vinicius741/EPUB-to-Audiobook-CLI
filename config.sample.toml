@@ -7,6 +7,7 @@ epubs = "epubs"
 out = "out"
 cache = "cache"
 logs = "logs"
+errors = "errors"
 
 [logging]
 # Levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -14,13 +15,13 @@ level = "INFO"
 console_level = "INFO"
 
 [tts]
-# Default MLX engine for Apple Silicon
-engine = "mlx"
-model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
+# Default cross-platform engine (macOS + Linux)
+engine = "kokoro_onnx"
+model_id = "onnx-community/Kokoro-82M-v1.0-ONNX"
 
 # Optional voice + language (engine-specific)
-# voice = "default"
-# lang_code = "en"
+voice = "af_heart"
+# lang_code = "en-us"
 # ref_audio = "path/to/narrator.wav"
 # ref_text = "Transcript of the reference audio"
 
@@ -30,16 +31,28 @@ sample_rate = 24000
 channels = 1
 
 # Chunking + retry controls
-max_chars = 1000
+max_chars = 450
 min_chars = 200
-hard_max_chars = 1250
+hard_max_chars = 700
 max_retries = 2
 backoff_base = 0.5
 backoff_jitter = 0.1
 output_format = "wav"
+
+# ONNX-specific options (ignored by MLX engine)
+execution_provider = "auto"
+onnx_model_file = "model_q8f16.onnx"
+onnx_voices_file = "voices-v1.0.bin"
+max_input_tokens = 510
+
+# Chapter parallelism controls
 chapter_workers = "auto"
 chapter_parallelism = "thread"
 unsafe_mlx_parallelism = false
+
+# Optional MLX backend example:
+# engine = "mlx"
+# model_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
 
 [audio]
 # Silence between chunks (milliseconds)

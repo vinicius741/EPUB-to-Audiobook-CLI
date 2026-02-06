@@ -15,7 +15,11 @@ def test_load_config_defaults(tmp_path: Path) -> None:
     assert config.paths.cache == tmp_path / "cache"
     assert config.paths.logs == tmp_path / "logs"
     assert config.logging.level == "INFO"
-    assert config.tts.engine == "mlx"
+    assert config.tts.engine == "kokoro_onnx"
+    assert config.tts.model_id == "onnx-community/Kokoro-82M-v1.0-ONNX"
+    assert config.tts.voice == "af_heart"
+    assert config.tts.execution_provider == "auto"
+    assert config.tts.max_input_tokens == 510
     assert config.tts.sample_rate == 24000
     assert config.tts.channels == 1
 
@@ -36,6 +40,8 @@ engine = "mlx"
 voice = "narrator"
 sample_rate = 44100
 channels = 2
+execution_provider = "CPUExecutionProvider"
+max_input_tokens = 256
 """.lstrip()
     )
 
@@ -47,6 +53,8 @@ channels = 2
     assert config.tts.voice == "narrator"
     assert config.tts.sample_rate == 44100
     assert config.tts.channels == 2
+    assert config.tts.execution_provider == "CPUExecutionProvider"
+    assert config.tts.max_input_tokens == 256
 
 
 def test_missing_config_raises(tmp_path: Path) -> None:

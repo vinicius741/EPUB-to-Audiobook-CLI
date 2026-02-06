@@ -11,13 +11,16 @@ import wave
 from typing import Iterable, Sequence
 
 from .config import Config
+from .interfaces import TtsEngine
 from .logging_setup import initialize_logging
 from .text_segmenter import BasicTextSegmenter
-from .tts_engine import MlxTtsEngine, TtsError, TtsModelError
+from .tts_engine import TtsError, TtsModelError
+from .tts_factory import backend_diagnostics, build_tts_engine, model_cache_status
 from .tts_pipeline import TtsSynthesisSettings, synthesize_text
 from .utils import ensure_dir, generate_run_id
 
 _LOGGER = logging.getLogger(__name__)
+_MIGRATION_NOTE_EMITTED: set[Path] = set()
 
 
 @dataclass(frozen=True)
@@ -66,13 +69,21 @@ def run_doctor(config: Config, options: DoctorOptions) -> int:
 def _check_environment(config: Config) -> list[DoctorCheck]:
     checks: list[DoctorCheck] = []
 
-    metal_status = _check_metal()
-    if metal_status is None:
-        checks.append(DoctorCheck("Metal", "WARN", "mlx not installed; cannot detect Metal availability."))
-    elif metal_status:
-        checks.append(DoctorCheck("Metal", "OK", "Metal GPU acceleration is available."))
-    else:
-        checks.append(DoctorCheck("Metal", "WARN", "Metal GPU acceleration not available."))
+    checks.append(DoctorCheck("Engine", "OK", config.tts.engine))
+
+    checks.extend(
+        DoctorCheck(check.name, check.status, check.detail)
+        for check in backend_diagnostics(config)
+    )
+
+    if config.tts.engine == "mlx":
+        metal_status = _check_metal()
+        if metal_status is None:
+            checks.append(DoctorCheck("Metal", "WARN", "mlx not installed; cannot detect Metal availability."))
+        elif metal_status:
+            checks.append(DoctorCheck("Metal", "OK", "Metal GPU acceleration is available."))
+        else:
+            checks.append(DoctorCheck("Metal", "WARN", "Metal GPU acceleration not available."))
 
     total_ram_gb = _total_ram_gb()
     if total_ram_gb is None:
@@ -82,8 +93,11 @@ def _check_environment(config: Config) -> list[DoctorCheck]:
     else:
         checks.append(DoctorCheck("Memory", "WARN", f"Only {total_ram_gb:.1f} GB RAM detected."))
 
-    cache_path = _find_model_cache(config.tts.model_id)
-    if cache_path is None:
+    required_files: tuple[str, ...] = ()
+    if config.tts.engine in {"kokoro", "kokoro_onnx", "onnx"}:
+        required_files = (config.tts.onnx_model_file, config.tts.onnx_voices_file)
+    cache_status = model_cache_status(config.tts.model_id, required_files=required_files)
+    if cache_status.path is None:
         checks.append(
             DoctorCheck(
                 "Model cache",
@@ -91,10 +105,26 @@ def _check_environment(config: Config) -> list[DoctorCheck]:
                 "Model cache not found; first run will download weights.",
             )
         )
+    elif cache_status.missing_files:
+        missing = ", ".join(cache_status.missing_files)
+        checks.append(
+            DoctorCheck(
+                "Model cache",
+                "WARN",
+                f"Model cache present at {cache_status.path}, but missing file(s): {missing}.",
+            )
+        )
     else:
-        checks.append(DoctorCheck("Model cache", "OK", f"Model cache present at {cache_path}."))
+        checks.append(DoctorCheck("Model cache", "OK", f"Model cache present at {cache_status.path}."))
 
     checks.append(DoctorCheck("Platform", "OK", f"{platform.platform()}"))
+    migration_note = _migration_note(config)
+    if migration_note is not None:
+        source = config.source
+        if source is None or source not in _MIGRATION_NOTE_EMITTED:
+            checks.append(DoctorCheck("Migration", "WARN", migration_note))
+            if source is not None:
+                _MIGRATION_NOTE_EMITTED.add(source)
 
     return checks
 
@@ -197,29 +227,14 @@ def _run_long_text_test(config: Config, options: DoctorOptions, logger: logging.
     return checks
 
 
-def _build_engine(config: Config, output_dir: Path) -> MlxTtsEngine:
-    if config.tts.engine != "mlx":
-        raise TtsModelError(f"Unsupported TTS engine '{config.tts.engine}'.")
-    ref_audio_id = _ref_audio_cache_id(config.tts.ref_audio)
-    return MlxTtsEngine(
-        model_id=config.tts.model_id,
-        output_dir=output_dir,
-        sample_rate=config.tts.sample_rate,
-        channels=config.tts.channels,
-        voice=config.tts.voice,
-        lang_code=config.tts.lang_code,
-        ref_audio=config.tts.ref_audio,
-        ref_text=config.tts.ref_text,
-        ref_audio_id=ref_audio_id,
-        speed=config.tts.speed,
-        max_input_chars=config.tts.max_chars,
-    )
+def _build_engine(config: Config, output_dir: Path) -> TtsEngine:
+    return build_tts_engine(config, output_dir)
 
 
 def _build_settings(config: Config) -> TtsSynthesisSettings:
     ref_audio_id = _ref_audio_cache_id(config.tts.ref_audio)
     return TtsSynthesisSettings(
-        model_id=config.tts.model_id,
+        model_id=f"{config.tts.engine}:{config.tts.model_id}",
         max_chars=config.tts.max_chars,
         min_chars=config.tts.min_chars,
         hard_max_chars=config.tts.hard_max_chars,
@@ -279,30 +294,32 @@ def _total_ram_gb() -> float | None:
         return None
 
 
-def _find_model_cache(model_id: str) -> Path | None:
-    model_dir = model_id.replace("/", "--")
-    candidates: list[Path] = []
-    import os
+def _migration_note(config: Config) -> str | None:
+    if config.source is None or not config.source.exists():
+        return None
 
-    for key in ("HUGGINGFACE_HUB_CACHE", "HF_HUB_CACHE", "HF_HOME"):
-        value = os.environ.get(key)
-        if not value:
-            continue
-        path = Path(value)
-        if key == "HF_HOME":
-            candidates.append(path / "hub")
-        else:
-            candidates.append(path)
+    try:
+        import tomllib  # type: ignore
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # type: ignore
+        except ModuleNotFoundError:
+            return None
 
-    if not candidates:
-        candidates.append(Path.home() / ".cache" / "huggingface" / "hub")
+    try:
+        with config.source.open("rb") as handle:
+            raw = tomllib.load(handle)
+    except (OSError, ValueError):
+        return None
 
-    for root in candidates:
-        if not root.exists():
-            continue
-        direct = root / f"models--{model_dir}"
-        if direct.exists():
-            return direct
+    tts = raw.get("tts")
+    if not isinstance(tts, dict):
+        return "Using new default TTS engine 'kokoro_onnx' because [tts] section is missing."
+
+    missing = [key for key in ("engine", "model_id") if key not in tts]
+    if missing:
+        joined = ", ".join(missing)
+        return f"Using new defaults for missing [tts] key(s): {joined}."
     return None
 
 
